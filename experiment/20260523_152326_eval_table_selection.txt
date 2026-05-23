@@ -1,0 +1,36 @@
+共 92 筆，表格庫 32 張，開始 LLM table selection 評測
+
+─────────────────────────────────────────────────────────────────
+  案例 [113]  場景：精準行銷與專案名單篩選
+  需求：南港分公司目前客戶的資料
+  Ground truth (8)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY, M_AC_ACCOUNT_PROD_TXN, M_AC_ACCOUNT_REVENUE, M_AT_ACCOUNT_TXN, M_AT_INSURANCE_TXN, M_AT_STOCK_TXN, M_RF_MARKET_SHARE
+  LLM 選出 (5)：M_AC_ACCOUNT, M_AC_ACCOUNT_INFO, M_PT_CUSTOMER, M_PT_SALES, M_RF_CHANNEL
+  漏選：M_AC_ACCOUNT_INVENTORY, M_AC_ACCOUNT_PROD_TXN, M_AC_ACCOUNT_REVENUE, M_AT_ACCOUNT_TXN, M_AT_INSURANCE_TXN, M_AT_STOCK_TXN, M_RF_MARKET_SHARE
+  多選：M_AC_ACCOUNT_INFO, M_PT_CUSTOMER, M_PT_SALES, M_RF_CHANNEL
+  P=0.20  R=0.12  F1=0.15  
+  tokens: in=6801  out=677  cost=$0.00305
+─────────────────────────────────────────────────────────────────
+  案例 [114]  場景：精準行銷與專案名單篩選
+  需求：全公司線下（現場/臨櫃）開戶數分佈
+  Ground truth (2)：M_AC_ACCOUNT, M_PT_CUSTOMER
+  LLM 選出 (2)：M_AC_ACCOUNT, M_PT_CUSTOMER
+  P=1.00  R=1.00  F1=1.00  ✓ exact
+  tokens: in=6878  out=659  cost=$0.00304
+─────────────────────────────────────────────────────────────────
+  案例 [116]  場景：交易動能趨勢與異動偵測
+  需求：查詢3月份台股交易量較113年10-12月月均交易量多5000萬以上客戶名單，以及113年未交易但在
+  Ground truth (4)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY_DLY, M_AC_ACCOUNT_PROD_TXN, M_RF_DATE
+  LLM 選出 (4)：M_AC_ACCOUNT_ASSET, M_AC_ACCOUNT_INFO, M_AT_ACCOUNT_TXN, M_PT_CUSTOMER
+  漏選：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY_DLY, M_AC_ACCOUNT_PROD_TXN, M_RF_DATE
+  多選：M_AC_ACCOUNT_ASSET, M_AC_ACCOUNT_INFO, M_AT_ACCOUNT_TXN, M_PT_CUSTOMER
+  P=0.00  R=0.00  F1=0.00  
+  tokens: in=6936  out=1891  cost=$0.00552
+─────────────────────────────────────────────────────────────────
+  案例 [119]  場景：財管商品業績與例行月報
+  需求：新板分公司需要更新後的最新名單及例行性報表資料。
+  Ground truth (13)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY, M_AC_ACCOUNT_REVENUE, M_AT_BOND_TXN, M_AT_BSBL_TXN, M_AT_FUND_TXN, M_AT_FUTURE_TXN, M_AT_INSURANCE_TXN, M_AT_LOAN_TXN, M_AT_SN_TXN, M_AT_STOCK_TXN, M_RF_DATE, S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  LLM 選出 (9)：M_AC_ACCOUNT_ASSET, M_AC_ACCOUNT_INFO, M_AC_ACCOUNT_REVENUE, M_AT_ACCOUNT_TXN, M_PT_CUSTOMER, M_RF_CHANNEL, M_RF_DATE, T_DR_ACCT, T_DR_ACCT_SEG
+  漏選：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY, M_AT_BOND_TXN, M_AT_BSBL_TXN, M_AT_FUND_TXN, M_AT_FUTURE_TXN, M_AT_INSURANCE_TXN, M_AT_LOAN_TXN, M_AT_SN_TXN, M_AT_STOCK_TXN, S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  多選：M_AC_ACCOUNT_ASSET, M_AC_ACCOUNT_INFO, M_AT_ACCOUNT_TXN, M_PT_CUSTOMER, M_RF_CHANNEL, T_DR_ACCT, T_DR_ACCT_SEG
+  P=0.22  R=0.15  F1=0.18  
+  tokens: in=6807  out=890  cost=$0.00348

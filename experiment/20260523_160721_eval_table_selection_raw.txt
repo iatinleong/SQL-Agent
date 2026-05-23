@@ -1,0 +1,38 @@
+共 92 筆，表格庫 32 張，模型：gpt-5.4-mini，模式：raw schema
+費率：input $0.75/M  output $4.5/M
+
+─────────────────────────────────────────────────────────────────
+  案例 [113]  場景：精準行銷與專案名單篩選
+  需求：南港分公司目前客戶的資料
+  Ground truth (8)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY, M_AC_ACCOUNT_PROD_TXN, M_AC_ACCOUNT_REVENUE, M_AT_ACCOUNT_TXN, M_AT_INSURANCE_TXN, M_AT_STOCK_TXN, M_RF_MARKET_SHARE
+  LLM 選出 (0)：（無）
+  漏選：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY, M_AC_ACCOUNT_PROD_TXN, M_AC_ACCOUNT_REVENUE, M_AT_ACCOUNT_TXN, M_AT_INSURANCE_TXN, M_AT_STOCK_TXN, M_RF_MARKET_SHARE
+  P=0.00  R=0.00  F1=0.00  
+  tokens: in=69246  out=15  cost=$0.05200
+─────────────────────────────────────────────────────────────────
+  案例 [114]  場景：精準行銷與專案名單篩選
+  需求：全公司線下（現場/臨櫃）開戶數分佈
+  Ground truth (2)：M_AC_ACCOUNT, M_PT_CUSTOMER
+  LLM 選出 (2)：M_AC_ACCOUNT_INFO, M_PT_CUSTOMER
+  漏選：M_AC_ACCOUNT
+  多選：M_AC_ACCOUNT_INFO
+  P=0.50  R=0.50  F1=0.50  
+  tokens: in=69323  out=14  cost=$0.05206
+─────────────────────────────────────────────────────────────────
+  案例 [116]  場景：交易動能趨勢與異動偵測
+  需求：查詢3月份台股交易量較113年10-12月月均交易量多5000萬以上客戶名單，以及113年未交易但在
+  Ground truth (4)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY_DLY, M_AC_ACCOUNT_PROD_TXN, M_RF_DATE
+  LLM 選出 (1)：T_DR_ACCT_SEG
+  漏選：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY_DLY, M_AC_ACCOUNT_PROD_TXN, M_RF_DATE
+  多選：T_DR_ACCT_SEG
+  P=0.00  R=0.00  F1=0.00  
+  tokens: in=69381  out=10  cost=$0.05208
+─────────────────────────────────────────────────────────────────
+  案例 [119]  場景：財管商品業績與例行月報
+  需求：新板分公司需要更新後的最新名單及例行性報表資料。
+  Ground truth (13)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY, M_AC_ACCOUNT_REVENUE, M_AT_BOND_TXN, M_AT_BSBL_TXN, M_AT_FUND_TXN, M_AT_FUTURE_TXN, M_AT_INSURANCE_TXN, M_AT_LOAN_TXN, M_AT_SN_TXN, M_AT_STOCK_TXN, M_RF_DATE, S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  LLM 選出 (3)：M_AC_ACCOUNT, M_PT_SALES, T_DR_ACCT_SEG
+  漏選：M_AC_ACCOUNT_INVENTORY, M_AC_ACCOUNT_REVENUE, M_AT_BOND_TXN, M_AT_BSBL_TXN, M_AT_FUND_TXN, M_AT_FUTURE_TXN, M_AT_INSURANCE_TXN, M_AT_LOAN_TXN, M_AT_SN_TXN, M_AT_STOCK_TXN, M_RF_DATE, S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  多選：M_PT_SALES, T_DR_ACCT_SEG
+  P=0.33  R=0.08  F1=0.12  
+  tokens: in=69252  out=19  cost=$0.05202

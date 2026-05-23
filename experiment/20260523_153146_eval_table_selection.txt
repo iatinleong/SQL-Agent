@@ -1,0 +1,123 @@
+共 92 筆，表格庫 32 張，開始 LLM table selection 評測
+
+─────────────────────────────────────────────────────────────────
+  案例 [113]  場景：精準行銷與專案名單篩選
+  需求：南港分公司目前客戶的資料
+  Ground truth (8)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY, M_AC_ACCOUNT_PROD_TXN, M_AC_ACCOUNT_REVENUE, M_AT_ACCOUNT_TXN, M_AT_INSURANCE_TXN, M_AT_STOCK_TXN, M_RF_MARKET_SHARE
+  LLM 選出 (3)：M_AC_ACCOUNT, M_PT_CUSTOMER, M_PT_SALES
+  漏選：M_AC_ACCOUNT_INVENTORY, M_AC_ACCOUNT_PROD_TXN, M_AC_ACCOUNT_REVENUE, M_AT_ACCOUNT_TXN, M_AT_INSURANCE_TXN, M_AT_STOCK_TXN, M_RF_MARKET_SHARE
+  多選：M_PT_CUSTOMER, M_PT_SALES
+  P=0.33  R=0.12  F1=0.18  
+  tokens: in=6801  out=20  cost=$0.00174
+─────────────────────────────────────────────────────────────────
+  案例 [114]  場景：精準行銷與專案名單篩選
+  需求：全公司線下（現場/臨櫃）開戶數分佈
+  Ground truth (2)：M_AC_ACCOUNT, M_PT_CUSTOMER
+  LLM 選出 (2)：M_AC_ACCOUNT, M_PT_CUSTOMER
+  P=1.00  R=1.00  F1=1.00  ✓ exact
+  tokens: in=6878  out=13  cost=$0.00175
+─────────────────────────────────────────────────────────────────
+  案例 [116]  場景：交易動能趨勢與異動偵測
+  需求：查詢3月份台股交易量較113年10-12月月均交易量多5000萬以上客戶名單，以及113年未交易但在
+  Ground truth (4)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY_DLY, M_AC_ACCOUNT_PROD_TXN, M_RF_DATE
+  LLM 選出 (5)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY_DLY, M_AC_ACCOUNT_PROD_TXN, M_PT_CUSTOMER, M_RF_DATE
+  多選：M_PT_CUSTOMER
+  P=0.80  R=1.00  F1=0.89  
+  tokens: in=6936  out=34  cost=$0.00180
+─────────────────────────────────────────────────────────────────
+  案例 [119]  場景：財管商品業績與例行月報
+  需求：新板分公司需要更新後的最新名單及例行性報表資料。
+  Ground truth (13)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY, M_AC_ACCOUNT_REVENUE, M_AT_BOND_TXN, M_AT_BSBL_TXN, M_AT_FUND_TXN, M_AT_FUTURE_TXN, M_AT_INSURANCE_TXN, M_AT_LOAN_TXN, M_AT_SN_TXN, M_AT_STOCK_TXN, M_RF_DATE, S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  LLM 選出 (1)：M_RF_CHANNEL
+  漏選：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY, M_AC_ACCOUNT_REVENUE, M_AT_BOND_TXN, M_AT_BSBL_TXN, M_AT_FUND_TXN, M_AT_FUTURE_TXN, M_AT_INSURANCE_TXN, M_AT_LOAN_TXN, M_AT_SN_TXN, M_AT_STOCK_TXN, M_RF_DATE, S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  多選：M_RF_CHANNEL
+  P=0.00  R=0.00  F1=0.00  
+  tokens: in=6807  out=8  cost=$0.00172
+─────────────────────────────────────────────────────────────────
+  案例 [127]  場景：人員異動與客戶移轉管理
+  需求：因應新板分公司同仁離職，需最新客戶名單並請協助更新例行性報表資料
+  Ground truth (2)：M_AC_ACCOUNT, S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  LLM 選出 (4)：M_AC_ACCOUNT, M_PT_CUSTOMER, M_PT_SALES, M_RF_CHANNEL
+  漏選：S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  多選：M_PT_CUSTOMER, M_PT_SALES, M_RF_CHANNEL
+  P=0.25  R=0.50  F1=0.33  
+  tokens: in=6824  out=22  cost=$0.00175
+─────────────────────────────────────────────────────────────────
+  案例 [135]  場景：財管商品業績與例行月報
+  需求：高雄分公司查詢價值plus客群1~3月海外股票、基金、海外債、壽險、結構型（境內、境外）交易狀況。
+  Ground truth (4)：M_AC_ACCOUNT, M_AC_ACCOUNT_PROD_TXN, M_AT_STOCK_TXN, M_PT_SALES
+  LLM 選出 (7)：M_AT_BOND_TXN, M_AT_FUND_TXN, M_AT_INSURANCE_TXN, M_AT_SN_TXN, M_AT_STOCK_TXN, M_PT_SALES, S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  漏選：M_AC_ACCOUNT, M_AC_ACCOUNT_PROD_TXN
+  多選：M_AT_BOND_TXN, M_AT_FUND_TXN, M_AT_INSURANCE_TXN, M_AT_SN_TXN, S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  P=0.29  R=0.50  F1=0.36  
+  tokens: in=6892  out=58  cost=$0.00184
+─────────────────────────────────────────────────────────────────
+  案例 [140]  場景：精準行銷與專案名單篩選
+  需求：查詢ABC經紀客群的客戶明細
+  Ground truth (9)：M_AC_ACCOUNT, M_AC_ACCOUNT_ACTU_BENEFIT, M_AT_BOND_TXN, M_AT_FUND_TXN, M_AT_INSURANCE_TXN, M_AT_SN_TXN, M_AT_STOCK_TXN, S_ARIELSHAO.CUSTOMER_GROUP_2026Q1, S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  LLM 選出 (2)：M_PT_CUSTOMER, S_ARIELSHAO.CUSTOMER_GROUP_2026Q1
+  漏選：M_AC_ACCOUNT, M_AC_ACCOUNT_ACTU_BENEFIT, M_AT_BOND_TXN, M_AT_FUND_TXN, M_AT_INSURANCE_TXN, M_AT_SN_TXN, M_AT_STOCK_TXN, S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  多選：M_PT_CUSTOMER
+  P=0.50  R=0.11  F1=0.18  
+  tokens: in=6797  out=24  cost=$0.00175
+─────────────────────────────────────────────────────────────────
+  案例 [143]  場景：交易動能趨勢與異動偵測
+  需求：查詢2022年至2025年青埔現貨前50大客戶的交易量變化及衰退、靜止狀況
+  Ground truth (2)：M_AC_ACCOUNT, M_AT_STOCK_TXN
+  LLM 選出 (3)：M_AC_ACCOUNT, M_AT_STOCK_TXN, M_RF_CHANNEL
+  多選：M_RF_CHANNEL
+  P=0.67  R=1.00  F1=0.80  
+  tokens: in=6866  out=19  cost=$0.00175
+─────────────────────────────────────────────────────────────────
+  案例 [144]  場景：人員異動與客戶移轉管理
+  需求：更新斗六價值PLUS客群客戶的最新資料數據（含合計），並更新已離職員工劉秉樺的客戶營業員資訊，同時希
+  Ground truth (4)：M_AC_ACCOUNT, M_AC_ACCOUNT_ASSET, M_AT_ACCOUNT_TXN, M_PT_CUSTOMER
+  LLM 選出 (4)：M_AC_ACCOUNT, M_PT_EMPLOYEE, M_PT_SALES, S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  漏選：M_AC_ACCOUNT_ASSET, M_AT_ACCOUNT_TXN, M_PT_CUSTOMER
+  多選：M_PT_EMPLOYEE, M_PT_SALES, S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  P=0.25  R=0.25  F1=0.25  
+  tokens: in=6874  out=33  cost=$0.00178
+─────────────────────────────────────────────────────────────────
+  案例 [145]  場景：庫存與損益明細報表
+  需求：台南分公司數據需求，包含客戶及債券相關資訊。
+  Ground truth (3)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY, M_AT_DIV
+  LLM 選出 (8)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY_DLY, M_AT_DIV, M_PT_CUSTOMER, M_PT_SALES, M_RF_CHANNEL, M_RF_STOCK, S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  漏選：M_AC_ACCOUNT_INVENTORY
+  多選：M_AC_ACCOUNT_INVENTORY_DLY, M_PT_CUSTOMER, M_PT_SALES, M_RF_CHANNEL, M_RF_STOCK, S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+  P=0.25  R=0.67  F1=0.36  
+  tokens: in=6864  out=55  cost=$0.00183
+─────────────────────────────────────────────────────────────────
+  案例 [146]  場景：庫存與損益明細報表
+  需求：查詢客戶複委託債券庫存與配息相關數據，並篩選美元債券以及南一區南二區客戶資料
+  Ground truth (3)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY, M_AT_DIV
+  LLM 選出 (5)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY, M_AT_DIV, M_PT_CUSTOMER, M_PT_SALES
+  多選：M_PT_CUSTOMER, M_PT_SALES
+  P=0.60  R=1.00  F1=0.75  
+  tokens: in=6885  out=29  cost=$0.00178
+─────────────────────────────────────────────────────────────────
+  案例 [149]  場景：人員異動與客戶移轉管理
+  需求：找出臺南分公司去年離退營業員移轉的客戶
+  Ground truth (4)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY, M_AC_ACCOUNT_REVENUE, M_AT_ACCOUNT_TXN
+  LLM 選出 (8)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY_DLY, M_AC_ACCOUNT_PROD_TXN, M_AC_ACCOUNT_REVENUE, M_AT_ACCOUNT_TXN, M_PT_CUSTOMER, M_PT_SALES, T_DR_ACCT_SEG
+  漏選：M_AC_ACCOUNT_INVENTORY
+  多選：M_AC_ACCOUNT_INVENTORY_DLY, M_AC_ACCOUNT_PROD_TXN, M_PT_CUSTOMER, M_PT_SALES, T_DR_ACCT_SEG
+  P=0.38  R=0.75  F1=0.50  
+  tokens: in=6977  out=54  cost=$0.00185
+─────────────────────────────────────────────────────────────────
+  案例 [150]  場景：精準行銷與專案名單篩選
+  需求：擷取南一區與南二區2025年有實動境內ELN及FCN產品的有效台幣衍生性帳戶合格戶數最新數據
+  Ground truth (5)：M_AC_ACCOUNT, M_AC_ACCOUNT_INFO, M_AT_SN_TXN, M_PT_CUSTOMER, M_PT_EMPLOYEE
+  LLM 選出 (3)：M_AC_ACCOUNT, M_AT_SN_TXN, M_PT_SALES
+  漏選：M_AC_ACCOUNT_INFO, M_PT_CUSTOMER, M_PT_EMPLOYEE
+  多選：M_PT_SALES
+  P=0.67  R=0.40  F1=0.50  
+  tokens: in=6874  out=19  cost=$0.00176
+─────────────────────────────────────────────────────────────────
+  案例 [157]  場景：精準行銷與專案名單篩選
+  需求：查詢斗六價值PLUS客群客戶的最新數據（包含合計值）及營業員價值PLUS客戶滲透率，並要求更新已離職
+  Ground truth (4)：M_AC_ACCOUNT, M_AC_ACCOUNT_ASSET, M_AT_ACCOUNT_TXN, M_PT_CUSTOMER
+  LLM 選出 (2)：S_MELODYJJJIAN.CUSTOMER_GROUP_2026, T_DR_ACCT
+  漏選：M_AC_ACCOUNT, M_AC_ACCOUNT_ASSET, M_AT_ACCOUNT_TXN, M_PT_CUSTOMER
+  多選：S_MELODYJJJIAN.CUSTOMER_GROUP_2026, T_DR_ACCT
+  P=0.00  R=0.00  F1=0.00  
+  tokens: in=6859  out=24  cost=$0.00176

@@ -1,0 +1,6 @@
+{
+  "name": "eval_table_selection",
+  "timestamp": "20260523_140035",
+  "results": null,
+  "log": "共 92 筆，表格庫 32 張，開始 LLM table selection 評測\n\n─────────────────────────────────────────────────────────────────\n  案例 [113]  場景：精準行銷與專案名單篩選\n  需求：南港分公司目前客戶的資料\n  Ground truth (8)：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY, M_AC_ACCOUNT_PROD_TXN, M_AC_ACCOUNT_REVENUE, M_AT_ACCOUNT_TXN, M_AT_INSURANCE_TXN, M_AT_STOCK_TXN, M_RF_MARKET_SHARE\n  LLM 選出 (0)：（無）\n  漏選：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY, M_AC_ACCOUNT_PROD_TXN, M_AC_ACCOUNT_REVENUE, M_AT_ACCOUNT_TXN, M_AT_INSURANCE_TXN, M_AT_STOCK_TXN, M_RF_MARKET_SHARE\n  P=0.00  R=0.00  F1=0.00  \n─────────────────────────────────────────────────────────────────\n  案例 [114]  場景：精準行銷與專案名單篩選\n  需求：全公司線下（現場/臨櫃）開戶數分佈\n  Ground truth (2)：M_AC_ACCOUNT, M_PT_CUSTOMER\n  LLM 選出 (0)：（無）\n  漏選：M_AC_ACCOUNT, M_PT_CUSTOMER\n  P=0.00  R=0.00  F1=0.00  \n"
+}
