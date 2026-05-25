@@ -5,6 +5,5 @@ python-dotenv
 pydantic
 numpy
 sentence-transformers
-torchvision
 supabase
 python-oracledb
