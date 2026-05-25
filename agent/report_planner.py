@@ -34,6 +34,9 @@ def plan_report(
     """
     qa_history：[{"q": "...", "a": "..."}, ...]，代表已確認的問答記錄。
     """
+    from datetime import date as _date
+    today = _date.today().strftime("%Y/%m/%d")
+
     sqls_text = "\n\n---\n\n".join(case_sqls[:5]) if case_sqls else "（無歷史案例）"
 
     qa_block = ""
@@ -42,6 +45,8 @@ def plan_report(
         qa_block = "\n\n【雙方對話記錄（已確認的資訊，請以此為依據）】\n" + "\n\n".join(lines)
 
     prompt = f"""\
+今日日期：{today}
+
 【使用者需求】
 {requirement}
 
