@@ -27,6 +27,46 @@ SCHEMA_PATH: Path = BASE_DIR / "schema.csv"
 RELATIONSHIPS_PATH: Path = BASE_DIR / "relationships.json"
 METRICS_PATH: Path = BASE_DIR / "metrics.json"
 BUSINESS_SKILLS_PATH: Path = BASE_DIR / "business_skills.json"
+CODE_MAPPING_PATH: Path = BASE_DIR / "code_mapping.json"
+
+_code_mapping: dict | None = None
+_col_codes: dict | None = None  # 扁平欄位索引：column_name.upper() → {code: desc}
+
+def _get_code_mapping() -> dict:
+    global _code_mapping
+    if _code_mapping is None:
+        if CODE_MAPPING_PATH.exists():
+            with open(CODE_MAPPING_PATH, encoding="utf-8") as f:
+                _code_mapping = json.load(f)
+        else:
+            _code_mapping = {}
+    return _code_mapping
+
+
+def _get_col_codes() -> dict:
+    """以欄位名稱為 key 的代碼字典（不管來源表名稱）。
+    同欄位名稱在不同表有不同條目時，以代碼數量較多者為準。
+    """
+    global _col_codes
+    if _col_codes is not None:
+        return _col_codes
+    _col_codes = {}
+    for tbl_codes in _get_code_mapping().values():
+        for col, codes in tbl_codes.items():
+            key = col.upper()
+            if key not in _col_codes or len(codes) > len(_col_codes[key]):
+                _col_codes[key] = codes
+    return _col_codes
+
+
+def _fmt_codes(codes: dict, max_show: int = 20) -> str:
+    """將代碼 dict 格式化為 [001=男, 002=女, ...共4種]。超過 max_show 種則截斷。"""
+    items = list(codes.items())
+    shown = items[:max_show]
+    parts = [f"{k}={v}" for k, v in shown]
+    suffix = f"...共{len(items)}種" if len(items) > max_show else ""
+    inner = ", ".join(parts) + (", " + suffix if suffix else "")
+    return f"[{inner}]"
 
 SEP = "─" * 62
 WIDE_SEP = "═" * 62
@@ -51,7 +91,9 @@ class GenerationResult:
 # ── Schema 載入 ────────────────────────────────────────────────────
 
 def _load_schema_for_tables(table_names: list[str]) -> str:
-    """從 schema.csv 取出指定表格的欄位，格式化為 prompt 用文字。"""
+    """從 schema.csv 取出指定表格的欄位，格式化為 prompt 用文字。
+    若 code_mapping.json 有該欄位的代碼對照（≤30 種），附加在欄位說明後面。
+    """
     table_set = {t.upper() for t in table_names}
     by_table: dict[str, list[dict]] = {}
 
@@ -64,6 +106,8 @@ def _load_schema_for_tables(table_names: list[str]) -> str:
     if not by_table:
         return "（找不到相關表格定義）"
 
+    col_code_map = _get_col_codes()
+
     lines: list[str] = []
     for tname in sorted(by_table):
         rows = by_table[tname]
@@ -74,7 +118,17 @@ def _load_schema_for_tables(table_names: list[str]) -> str:
             col_cn = row.get("欄位中文名稱", "")
             defn = row.get("欄位定義說明", "")
             pk = "PK  " if row.get("Primary Key", "") == "PK" else "    "
-            lines.append(f"  {pk}{col}（{col_cn}）：{defn}")
+            col_codes = col_code_map.get(col.upper(), {})
+            already_in_defn = sum(1 for k in col_codes if k in defn) >= 2
+            all_same_desc = len(set(col_codes.values())) <= 1
+            code_hint = (
+                f"  {_fmt_codes(col_codes)}"
+                if 0 < len(col_codes) <= 30
+                and not already_in_defn
+                and not all_same_desc
+                else ""
+            )
+            lines.append(f"  {pk}{col}（{col_cn}）：{defn}{code_hint}")
     return "\n".join(lines)
 
 
