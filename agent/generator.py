@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .config import BASE_DIR, GENERATION_MODEL, openai_client
+from .config import BASE_DIR, GENERATION_MODEL, get_model_pricing, openai_client
 from .retriever import RetrievalHit
 
 _REASONING_MODELS = {"o1", "o1-mini", "o3", "o3-mini", "o4-mini"}
@@ -45,6 +45,7 @@ class GenerationResult:
     final_sql: str
     injected_summary: dict = field(default_factory=dict)
     tokens: dict[str, int] = field(default_factory=dict)
+    cost_usd: float = 0.0
 
 
 # ── Schema 載入 ────────────────────────────────────────────────────
@@ -490,6 +491,9 @@ def generate(
         "relationships": [(a, b) for a, b in rel_pairs],
     }
 
+    price_in, price_out = get_model_pricing(model)
+    gen_cost = (a_in + b_in) / 1_000_000 * price_in + (a_out + b_out) / 1_000_000 * price_out
+
     return GenerationResult(
         candidate_tables=candidate_tables,
         all_tables=all_tables,
@@ -500,4 +504,5 @@ def generate(
         final_sql=final_sql,
         tokens={"step_a_in": a_in, "step_a_out": a_out, "step_b_in": b_in, "step_b_out": b_out},
         injected_summary=injected_summary,
+        cost_usd=gen_cost,
     )

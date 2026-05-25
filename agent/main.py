@@ -40,7 +40,7 @@ def run(requirement: Union[str, dict]) -> tuple | None:
 
     # Phase 1
     print("=== Phase 1：場景分類 ===")
-    classification = classify_intent(requirement)
+    classification, _clf_tok = classify_intent(requirement)
     print(f"主要場景：{classification.主要場景}")
     secondary = resolve_secondary_scene(classification)
     if classification.次要場景:

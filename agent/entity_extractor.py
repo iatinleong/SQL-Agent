@@ -53,9 +53,11 @@ _CJK_RE = re.compile(r"[一-鿿]")
 _BRANCH_SUFFIXES = ("分公司", "分行", "辦事處", "分部")
 
 
-def _detect_branches(query: str) -> list[str]:
-    """擷取 '竹北分公司' 這類名稱：取後綴前剛好 2 個漢字作為地名。"""
-    results: list[str] = []
+def _detect_branches(query: str, branch_mapping: dict[str, str] | None = None) -> list[tuple[str, str]]:
+    """擷取 '竹北分公司' 這類名稱，回傳 (full_name, stem) 列表。
+    優先嘗試 4→2 字的地名，以 branch_mapping 命中最長的為準；無 mapping 時取 2 字。
+    """
+    results: list[tuple[str, str]] = []
     seen: set[str] = set()
     for suffix in _BRANCH_SUFFIXES:
         start = 0
@@ -63,13 +65,23 @@ def _detect_branches(query: str) -> list[str]:
             idx = query.find(suffix, start)
             if idx < 0:
                 break
-            if idx >= 2:
-                city = query[idx - 2 : idx]
-                if all(_CJK_RE.match(c) for c in city):
-                    branch = city + suffix
-                    if branch not in seen:
-                        seen.add(branch)
-                        results.append(branch)
+            stem = None
+            for length in range(4, 1, -1):
+                if idx >= length:
+                    candidate = query[idx - length : idx]
+                    if all(_CJK_RE.match(c) for c in candidate):
+                        if branch_mapping and candidate in branch_mapping:
+                            stem = candidate
+                            break
+            if stem is None and idx >= 2:
+                candidate = query[idx - 2 : idx]
+                if all(_CJK_RE.match(c) for c in candidate):
+                    stem = candidate
+            if stem:
+                branch = stem + suffix
+                if branch not in seen:
+                    seen.add(branch)
+                    results.append((branch, stem))
             start = idx + 1
     return results
 
@@ -131,10 +143,10 @@ def extract_entities(query: str) -> ExtractionResult:
 
     # ── 3. 分公司偵測 ────────────────────────────────────────────
     branch_lines: list[str] = []
-    for branch_name in _detect_branches(query):
+    for branch_name, stem in _detect_branches(query, branch_mapping):
         result.detected_branches.append(branch_name)
-        if branch_name in branch_mapping:
-            code = branch_mapping[branch_name]
+        code = branch_mapping.get(branch_name) or branch_mapping.get(stem)
+        if code:
             result.codes["BRANCH_CODE"] = code
             branch_lines.append(f"  分公司：{branch_name} → BRANCH_CODE='{code}'")
         else:

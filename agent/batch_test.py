@@ -66,7 +66,7 @@ def run_batch_test() -> list[dict]:
         print(f"  需求：{_req_summary(case)[:60]}")
 
         # ── Phase 1 ──────────────────────────────────────────────────────
-        classification = classify_intent(case.get("需求", req_text))
+        classification, _clf_tok = classify_intent(case.get("需求", req_text))
         predicted = classification.主要場景
         p1_hit = predicted == expected_scene
         secondary = resolve_secondary_scene(classification)

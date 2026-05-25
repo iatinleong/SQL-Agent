@@ -11,15 +11,12 @@ from .reader import normalize_requirement
 from .taxonomy import build_taxonomy_section, get_category_names, load_taxonomy
 
 
-def classify_intent(requirement: Union[str, dict]) -> ClassificationResult:
+def classify_intent(requirement: Union[str, dict]) -> tuple[ClassificationResult, dict]:
     """
     Phase 1 主函式：將報表需求分類到業務場景。
 
-    Args:
-        requirement: 報表需求，可為 dict（解析自報表需求.txt）或自由文字。
-
     Returns:
-        ClassificationResult：主/次要場景、分類理由、各標籤置信度。
+        (ClassificationResult, tokens_dict) — tokens_dict keys: classify_in, classify_out
     """
     taxonomy = load_taxonomy()
     category_names = get_category_names(taxonomy)
@@ -36,7 +33,11 @@ def classify_intent(requirement: Union[str, dict]) -> ClassificationResult:
         ],
         response_format=ClassificationResult,
     )
-    return response.choices[0].message.parsed
+    tokens = {
+        "classify_in": response.usage.prompt_tokens,
+        "classify_out": response.usage.completion_tokens,
+    }
+    return response.choices[0].message.parsed, tokens
 
 
 def _build_system_prompt(taxonomy: list[dict], category_names: list[str]) -> str:

@@ -34,8 +34,8 @@ _SYSTEM = """\
 {"safe": false, "reason": "一句話說明拒絕原因（中文）"}"""
 
 
-def check_input(text: str, model: str = CLASSIFICATION_MODEL) -> tuple[bool, str]:
-    """回傳 (is_safe, reason)。is_safe=False 時 reason 說明拒絕原因。"""
+def check_input(text: str, model: str = CLASSIFICATION_MODEL) -> tuple[bool, str, dict]:
+    """回傳 (is_safe, reason, tokens)。is_safe=False 時 reason 說明拒絕原因。"""
     resp = _chat(
         model,
         messages=[
@@ -45,8 +45,12 @@ def check_input(text: str, model: str = CLASSIFICATION_MODEL) -> tuple[bool, str
         temperature=0,
     )
     raw = (resp.choices[0].message.content or "").strip().strip("```json").strip("```").strip()
+    tokens = {
+        "guardrail_in": resp.usage.prompt_tokens,
+        "guardrail_out": resp.usage.completion_tokens,
+    }
     try:
         result = json.loads(raw)
-        return bool(result.get("safe", True)), result.get("reason", "")
+        return bool(result.get("safe", True)), result.get("reason", ""), tokens
     except Exception:
-        return True, ""
+        return True, "", tokens

@@ -89,6 +89,7 @@ class Turn:
     injected_log: str = ""
     step_a_log: str = ""
     step_b_log: str = ""
+    cost_usd: float = 0.0
 
 
 # ── Session state ─────────────────────────────────────────────────
@@ -180,10 +181,10 @@ def _fmt_phase2(hits, all_cases: list) -> str:
 
 # ── Pipeline (progressive inline rendering) ───────────────────────
 
-def _run_and_render_full(requirement: str) -> Turn | None:
+def _run_and_render_full(requirement: str, guardrail_tokens: dict | None = None) -> Turn | None:
     import json as _json
     from agent.classifier import classify_intent
-    from agent.config import ALL_CASES_PATH, GENERATION_MODEL
+    from agent.config import ALL_CASES_PATH, CLASSIFICATION_MODEL, GENERATION_MODEL, get_model_pricing
     from agent.entity_extractor import extract_entities
     from agent.generator import generate
     from agent.reader import normalize_requirement
@@ -198,7 +199,7 @@ def _run_and_render_full(requirement: str) -> Turn | None:
         # Phase 1
         _s = st.empty()
         _s.caption("⏳ Phase 1：場景分類中…")
-        classification = classify_intent(requirement)
+        classification, classify_tokens = classify_intent(requirement)
         primary_scene  = classification.主要場景
         phase1_log     = _fmt_phase1(classification)
         _s.empty()
@@ -252,12 +253,32 @@ def _run_and_render_full(requirement: str) -> Turn | None:
             with st.expander("SQL 思路", expanded=False):
                 st.markdown(gen.final_reasoning)
 
+    # ── 費用計算 ──────────────────────────────────────────────────
+    clf_price_in, clf_price_out = get_model_pricing(CLASSIFICATION_MODEL)
+    classify_cost = (
+        classify_tokens.get("classify_in", 0) / 1_000_000 * clf_price_in
+        + classify_tokens.get("classify_out", 0) / 1_000_000 * clf_price_out
+    )
+    guardrail_cost = 0.0
+    if guardrail_tokens:
+        g_price_in, g_price_out = get_model_pricing(CLASSIFICATION_MODEL)
+        guardrail_cost = (
+            guardrail_tokens.get("guardrail_in", 0) / 1_000_000 * g_price_in
+            + guardrail_tokens.get("guardrail_out", 0) / 1_000_000 * g_price_out
+        )
+    total_cost = guardrail_cost + classify_cost + gen.cost_usd
+
     st.session_state.hits          = hits
     st.session_state.all_cases     = all_cases
     st.session_state.primary_scene = primary_scene
 
     # ── 寫 Supabase experiment log ────────────────────────────────
     from agent.supabase_logger import insert
+    all_tokens = {
+        **(guardrail_tokens or {}),
+        **classify_tokens,
+        **gen.tokens,
+    }
     ok, err = insert("experiments", {
         "name": "generate",
         "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
@@ -267,7 +288,8 @@ def _run_and_render_full(requirement: str) -> Turn | None:
             "candidate_tables": gen.candidate_tables,
             "all_tables": gen.all_tables,
             "final_sql": gen.final_sql,
-            "tokens": gen.tokens,
+            "tokens": all_tokens,
+            "cost_usd": total_cost,
         },
         "log": "",
     })
@@ -284,13 +306,14 @@ def _run_and_render_full(requirement: str) -> Turn | None:
         injected_log=_fmt_injected(gen.injected_summary),
         step_a_log=step_a_log,
         step_b_log=step_b_log,
+        cost_usd=total_cost,
     )
 
 
-def _run_and_render_refiner(new_query: str) -> Turn | None:
+def _run_and_render_refiner(new_query: str, guardrail_tokens: dict | None = None) -> Turn | None:
     from agent.refiner import build_conversation_summary, classify_followup, refine
     from agent.schema_summarizer import load_table_summaries
-    from agent.config import CLASSIFICATION_MODEL, GENERATION_MODEL
+    from agent.config import CLASSIFICATION_MODEL, GENERATION_MODEL, get_model_pricing
 
     conv          = st.session_state.conversation
     current_sql   = conv[-1].sql
@@ -305,7 +328,7 @@ def _run_and_render_refiner(new_query: str) -> Turn | None:
     _s.empty()
 
     if intent == "NEW_QUERY":
-        return _run_and_render_full(new_query)
+        return _run_and_render_full(new_query, guardrail_tokens=guardrail_tokens)
 
     phase1_log = (
         f"**意圖：** {intent}  \n"
@@ -339,8 +362,23 @@ def _run_and_render_refiner(new_query: str) -> Turn | None:
             with st.expander("SQL 思路", expanded=False):
                 st.markdown(result.new_reasoning)
 
+    # ── 費用計算 ──────────────────────────────────────────────────
+    guardrail_cost = 0.0
+    if guardrail_tokens:
+        g_price_in, g_price_out = get_model_pricing(CLASSIFICATION_MODEL)
+        guardrail_cost = (
+            guardrail_tokens.get("guardrail_in", 0) / 1_000_000 * g_price_in
+            + guardrail_tokens.get("guardrail_out", 0) / 1_000_000 * g_price_out
+        )
+    total_cost = guardrail_cost + result.cost_usd
+
     # ── 寫 Supabase experiment log ────────────────────────────────
     from agent.supabase_logger import insert
+    all_tokens = {
+        **(guardrail_tokens or {}),
+        **result.classify_tokens,
+        **result.refine_tokens,
+    }
     ok, err = insert("experiments", {
         "name": "refine",
         "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
@@ -349,7 +387,8 @@ def _run_and_render_refiner(new_query: str) -> Turn | None:
             "intent": result.intent,
             "target_tables": result.target_tables,
             "final_sql": result.new_sql,
-            "tokens": {**result.classify_tokens, **result.refine_tokens},
+            "tokens": all_tokens,
+            "cost_usd": total_cost,
         },
         "log": "",
     })
@@ -363,6 +402,7 @@ def _run_and_render_refiner(new_query: str) -> Turn | None:
         intent=result.intent,
         modification=result.modification_note,
         phase1_log=phase1_log,
+        cost_usd=total_cost,
     )
 
 
@@ -501,6 +541,7 @@ def _render_turn(turn: Turn, idx: int):
                 st.markdown(turn.reasoning)
 
 
+
 # ── Main ──────────────────────────────────────────────────────────
 
 def main():
@@ -547,14 +588,18 @@ def main():
         _gs = st.empty()
         _gs.caption("🛡️ 安全審查中…")
         from agent.guardrail import check_input
-        is_safe, reason = check_input(prompt)
+        is_safe, reason, guardrail_tokens = check_input(prompt)
         _gs.empty()
 
         if not is_safe:
             st.error(f"⛔ 輸入不符合規範，請重新描述報表需求。\n\n原因：{reason}")
         else:
             try:
-                turn = _run_and_render_full(prompt) if is_first else _run_and_render_refiner(prompt)
+                turn = (
+                    _run_and_render_full(prompt, guardrail_tokens=guardrail_tokens)
+                    if is_first
+                    else _run_and_render_refiner(prompt, guardrail_tokens=guardrail_tokens)
+                )
             except Exception as e:
                 import traceback
                 st.error(f"錯誤：{e}\n\n```\n{traceback.format_exc()}\n```")

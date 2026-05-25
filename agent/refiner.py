@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from .config import CLASSIFICATION_MODEL, GENERATION_MODEL
+from .config import CLASSIFICATION_MODEL, GENERATION_MODEL, get_model_pricing
 from .generator import _chat, _load_schema_for_tables
 
 INTENTS = ("ADD_TABLE", "REMOVE_TABLE", "MODIFY_SQL", "NEW_QUERY")
@@ -52,6 +52,7 @@ class RefineResult:
     new_sql: str = ""
     classify_tokens: dict[str, int] = field(default_factory=dict)
     refine_tokens: dict[str, int] = field(default_factory=dict)
+    cost_usd: float = 0.0
 
 
 def classify_followup(
@@ -191,6 +192,16 @@ def refine(
     else:
         new_sql = raw.strip()
 
+    clf_price_in, clf_price_out = get_model_pricing(CLASSIFICATION_MODEL)
+    clf_in = classify_tokens.get("classify_in", 0)
+    clf_out = classify_tokens.get("classify_out", 0)
+    clf_cost = clf_in / 1_000_000 * clf_price_in + clf_out / 1_000_000 * clf_price_out
+
+    ref_price_in, ref_price_out = get_model_pricing(model)
+    ref_in = refine_tokens.get("refine_in", 0)
+    ref_out = refine_tokens.get("refine_out", 0)
+    ref_cost = ref_in / 1_000_000 * ref_price_in + ref_out / 1_000_000 * ref_price_out
+
     return RefineResult(
         intent=intent,
         target_tables=target_tables,
@@ -199,4 +210,5 @@ def refine(
         new_sql=new_sql,
         classify_tokens=classify_tokens,
         refine_tokens=refine_tokens,
+        cost_usd=clf_cost + ref_cost,
     )
