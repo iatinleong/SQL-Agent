@@ -197,7 +197,8 @@ def _get_case_sql_text(case_id: str, all_cases: list[dict], cap: int = _SQL_CAP_
 _STEP_A_SYSTEM = """\
 你是一位 Oracle SQL 專家，熟悉台灣金融業的報表邏輯與資料倉儲設計。
 請根據報表需求，從候選表格中選出適合的表格，寫出完整可執行的 Oracle SQL。
-SQL 中不要放入假設性資料或 placeholder，所有欄位必須來自提供的表格定義。"""
+SQL 中不要放入假設性資料或 placeholder，所有欄位必須來自提供的表格定義。
+遇到「本月」「上個月」「今年」等相對日期，請依據今日日期換算成正確的絕對日期區間。"""
 
 
 def _step_a(
@@ -208,6 +209,7 @@ def _step_a(
     model: str,
     entities_text: str = "",
     skills_text: str = "",
+    today: str = "",
 ) -> tuple[str, str, int, int]:
     """Step A：LLM 從候選池自由生成 SQL + 思路。回傳 (sql, reasoning, in_tok, out_tok)。"""
     optional_blocks = []
@@ -237,10 +239,11 @@ def _step_a(
 --- 思路 ---
 （你選了哪些表格及原因、JOIN 條件、時間篩選、聚合邏輯）"""
 
+    system = (f"今日日期：{today}\n\n" + _STEP_A_SYSTEM) if today else _STEP_A_SYSTEM
     resp = _chat(
         model,
         messages=[
-            {"role": "system", "content": _STEP_A_SYSTEM},
+            {"role": "system", "content": system},
             {"role": "user", "content": user_prompt},
         ],
         temperature=0,
@@ -417,10 +420,13 @@ def generate(
     if skills_count:
         print(f"  注入 business_skills：{skills_count} 條（場景={scene or '—'}）")
 
+    from datetime import date as _date
+    today = _date.today().strftime("%Y/%m/%d")
     step_a_sql, step_a_reasoning, a_in, a_out = _step_a(
         requirement, step_a_schema, rels_text, metrics_text, model,
         entities_text=extraction.enriched_entities,
         skills_text=skills_text,
+        today=today,
     )
     print(f"  tokens：in={a_in}  out={a_out}")
     print(f"\n{step_a_sql[:400]}{'...' if len(step_a_sql) > 400 else ''}")
