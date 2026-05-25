@@ -29,33 +29,19 @@ METRICS_PATH: Path = BASE_DIR / "metrics.json"
 BUSINESS_SKILLS_PATH: Path = BASE_DIR / "business_skills.json"
 CODE_MAPPING_PATH: Path = BASE_DIR / "code_mapping.json"
 
-_code_mapping: dict | None = None
-_col_codes: dict | None = None  # 扁平欄位索引：column_name.upper() → {code: desc}
-
-def _get_code_mapping() -> dict:
-    global _code_mapping
-    if _code_mapping is None:
-        if CODE_MAPPING_PATH.exists():
-            with open(CODE_MAPPING_PATH, encoding="utf-8") as f:
-                _code_mapping = json.load(f)
-        else:
-            _code_mapping = {}
-    return _code_mapping
-
+_col_codes: dict | None = None  # { COLUMN_NAME_UPPER: {code: desc} }
 
 def _get_col_codes() -> dict:
-    """以欄位名稱為 key 的代碼字典（不管來源表名稱）。
-    同欄位名稱在不同表有不同條目時，以代碼數量較多者為準。
-    """
+    """載入 code_mapping.json（扁平欄位結構），以欄位名大寫為 key。"""
     global _col_codes
     if _col_codes is not None:
         return _col_codes
-    _col_codes = {}
-    for tbl_codes in _get_code_mapping().values():
-        for col, codes in tbl_codes.items():
-            key = col.upper()
-            if key not in _col_codes or len(codes) > len(_col_codes[key]):
-                _col_codes[key] = codes
+    if CODE_MAPPING_PATH.exists():
+        with open(CODE_MAPPING_PATH, encoding="utf-8") as f:
+            raw = json.load(f)
+        _col_codes = {k.upper(): v for k, v in raw.items()}
+    else:
+        _col_codes = {}
     return _col_codes
 
 
