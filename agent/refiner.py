@@ -23,7 +23,11 @@ _CLASSIFY_SYSTEM = """\
 
 _REFINE_SYSTEM = """\
 你是一位 Oracle SQL 專家，熟悉台灣金融業報表邏輯。
-根據使用者的修改指令，改寫已有的 SQL，並說明改法與最終設計思路。"""
+根據使用者的修改指令，改寫已有的 SQL，並說明改法與最終設計思路。
+
+【Schema 規則】
+所有表格一律加上 DM_S_VIEW schema 前綴（例如 DM_S_VIEW.M_AC_ACCOUNT），
+唯一例外：表格名稱本身已含有 schema 前綴（例如 S_MELODYJJJIAN.CUSTOMER_GROUP_2026），則保持原樣不做修改。"""
 
 
 @dataclass

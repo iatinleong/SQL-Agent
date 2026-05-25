@@ -198,7 +198,11 @@ _STEP_A_SYSTEM = """\
 你是一位 Oracle SQL 專家，熟悉台灣金融業的報表邏輯與資料倉儲設計。
 請根據報表需求，從候選表格中選出適合的表格，寫出完整可執行的 Oracle SQL。
 SQL 中不要放入假設性資料或 placeholder，所有欄位必須來自提供的表格定義。
-遇到「本月」「上個月」「今年」等相對日期，請依據今日日期換算成正確的絕對日期區間。"""
+遇到「本月」「上個月」「今年」等相對日期，請依據今日日期換算成正確的絕對日期區間。
+
+【Schema 規則】
+所有表格一律加上 DM_S_VIEW schema 前綴（例如 DM_S_VIEW.M_AC_ACCOUNT），
+唯一例外：表格名稱本身已含有 schema 前綴（例如 S_MELODYJJJIAN.CUSTOMER_GROUP_2026），則保持原樣不做修改。"""
 
 
 def _step_a(
