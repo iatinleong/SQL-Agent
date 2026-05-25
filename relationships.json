@@ -1,0 +1,402 @@
+[
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "S_ARIELSHAO.CUSTOMER_GROUP_2026Q1",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = S_ARIELSHAO.CUSTOMER_GROUP_2026Q1.客戶帳號",
+    "case_count": 12,
+    "raw_frequency": 15,
+    "cases": [
+      "119",
+      "127",
+      "140",
+      "170",
+      "275",
+      "321",
+      "350",
+      "450",
+      "451",
+      "595",
+      "板橋分公司例行性報表 - ABC客戶交易統計",
+      "樹林分公司 - 近三月份現貨交易量"
+    ]
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "S_MELODYJJJIAN.CUSTOMER_GROUP_2026",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT.PARTY_ID_MASK = S_MELODYJJJIAN.CUSTOMER_GROUP_2026.ID",
+    "case_count": 11,
+    "raw_frequency": 12,
+    "cases": [
+      "119",
+      "127",
+      "140",
+      "275",
+      "321",
+      "350",
+      "450",
+      "451",
+      "560",
+      "595",
+      "例行性報表"
+    ],
+    "condition_variants": {
+      "M_AC_ACCOUNT.PARTY_ID = S_MELODYJJJIAN.CUSTOMER_GROUP_2026.ID": 2,
+      "M_AC_ACCOUNT.PARTY_ID_MASK = S_MELODYJJJIAN.CUSTOMER_GROUP_2026.ID": 10
+    }
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AC_ACCOUNT_INVENTORY",
+    "join_type": "INNER JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AC_ACCOUNT_INVENTORY.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AC_ACCOUNT_INVENTORY.PROD_TYPE_CODE",
+    "case_count": 9,
+    "raw_frequency": 12,
+    "cases": [
+      "119",
+      "149",
+      "158",
+      "259",
+      "266",
+      "269",
+      "270",
+      "450",
+      "451"
+    ],
+    "join_note": "複合 JOIN key：避免不同商品帳號（台股/複委託/期貨）造成資料膨脹"
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AC_ACCOUNT_INFO",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AC_ACCOUNT_INFO.ACCT_NBR",
+    "case_count": 6,
+    "raw_frequency": 6,
+    "cases": [
+      "269",
+      "270",
+      "275",
+      "321",
+      "450",
+      "451"
+    ],
+    "condition_variants": {
+      "M_AC_ACCOUNT.ACCT_NBR = M_AC_ACCOUNT_INFO.ACCT_NBR": 4
+    }
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AT_INSURANCE_TXN",
+    "join_type": "INNER JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AT_INSURANCE_TXN.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AT_INSURANCE_TXN.PROD_TYPE_CODE",
+    "case_count": 5,
+    "raw_frequency": 32,
+    "cases": [
+      "113",
+      "202",
+      "208",
+      "撈取樹林分公司1-12月業績資料",
+      "新板分公司請求"
+    ],
+    "join_note": "複合 JOIN key：避免不同商品帳號（台股/複委託/期貨）造成資料膨脹"
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AT_STOCK_TXN",
+    "join_type": "INNER JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AT_STOCK_TXN.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AT_STOCK_TXN.PROD_TYPE_CODE",
+    "case_count": 4,
+    "raw_frequency": 8,
+    "cases": [
+      "135",
+      "222",
+      "226",
+      "230"
+    ],
+    "join_note": "複合 JOIN key：避免不同商品帳號（台股/複委託/期貨）造成資料膨脹"
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AT_SN_TXN",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AT_SN_TXN.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AT_SN_TXN.PROD_TYPE_CODE",
+    "case_count": 4,
+    "cases": [
+      "150",
+      "202",
+      "208",
+      "222"
+    ],
+    "join_note": "複合 JOIN key：避免不同商品帳號（台股/複委託/期貨）造成資料膨脹；可改用 PARTY_ID 做跨帳號彙總",
+    "condition_variants": {
+      "M_AC_ACCOUNT.ACCT_NBR = M_AT_SN_TXN.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AT_SN_TXN.PROD_TYPE_CODE": "帳號為單位",
+      "M_AC_ACCOUNT.PARTY_ID = M_AT_SN_TXN.PARTY_ID": "人為單位（跨帳號彙總）"
+    }
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AC_ACCOUNT_ASSET",
+    "join_type": "INNER JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AC_ACCOUNT_ASSET.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AC_ACCOUNT_ASSET.PROD_TYPE_CODE",
+    "case_count": 3,
+    "raw_frequency": 12,
+    "cases": [
+      "144",
+      "157",
+      "178"
+    ],
+    "join_note": "複合 JOIN key：避免不同商品帳號（台股/複委託/期貨）造成資料膨脹"
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AC_ACCOUNT_PROD_TXN",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT.SYS_NEW_ACCT_NBR = M_AC_ACCOUNT_PROD_TXN.ACCT_NBR",
+    "case_count": 3,
+    "raw_frequency": 6,
+    "cases": [
+      "191",
+      "263",
+      "請協助撈取離退同仁客戶交易狀況"
+    ],
+    "condition_variants": {
+      "M_AC_ACCOUNT.PROD_TYPE_CODE = M_AC_ACCOUNT_PROD_TXN.PROD_TYPE_CODE": 2,
+      "M_AC_ACCOUNT.SYS_NEW_ACCT_NBR = M_AC_ACCOUNT_PROD_TXN.ACCT_NBR": 4
+    }
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_PT_CUSTOMER",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT.PARTY_ID = M_PT_CUSTOMER.PARTY_ID",
+    "case_count": 3,
+    "raw_frequency": 3,
+    "cases": [
+      "114",
+      "230",
+      "264"
+    ],
+    "condition_variants": {
+      "M_AC_ACCOUNT.PARTY_ID = M_PT_CUSTOMER.PARTY_ID": 2
+    }
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AC_ACCOUNT_REVENUE",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AC_ACCOUNT_REVENUE.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AC_ACCOUNT_REVENUE.PROD_TYPE_CODE",
+    "case_count": 3,
+    "raw_frequency": 3,
+    "cases": [
+      "119",
+      "450",
+      "451"
+    ],
+    "condition_variants": {
+      "M_AC_ACCOUNT.ACCT_NBR = M_AC_ACCOUNT_REVENUE.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AC_ACCOUNT_REVENUE.PROD_TYPE_CODE": 8,
+      "M_AC_ACCOUNT.SYS_NEW_ACCT_NBR = M_AC_ACCOUNT_REVENUE.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AC_ACCOUNT_REVENUE.PROD_TYPE_CODE": 4
+    },
+    "join_note": "複合 JOIN key：避免不同商品帳號（台股/複委託/期貨）造成資料膨脹"
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AT_FUND_TXN",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AT_FUND_TXN.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AT_FUND_TXN.PROD_TYPE_CODE",
+    "case_count": 3,
+    "cases": [
+      "158",
+      "202",
+      "208"
+    ],
+    "join_note": "複合 JOIN key：避免不同商品帳號（台股/複委託/期貨）造成資料膨脹"
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AT_DIV",
+    "join_type": "INNER JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AT_DIV.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AT_DIV.PROD_TYPE_CODE",
+    "case_count": 2,
+    "raw_frequency": 4,
+    "cases": [
+      "145",
+      "146"
+    ],
+    "join_note": "複合 JOIN key：避免不同商品帳號（台股/複委託/期貨）造成資料膨脹"
+  },
+  {
+    "table_a": "M_AC_ACCOUNT_ASSET",
+    "table_b": "M_PT_CUSTOMER",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT_ASSET.PARTY_ID = M_PT_CUSTOMER.PARTY_ID",
+    "case_count": 2,
+    "raw_frequency": 3,
+    "cases": [
+      "144",
+      "157"
+    ]
+  },
+  {
+    "table_a": "M_PT_EMPLOYEE",
+    "table_b": "M_RF_CHANNEL",
+    "join_type": "LEFT JOIN",
+    "condition": "M_PT_EMPLOYEE.COMPANY_CODE = M_RF_CHANNEL.BRANCH_CODE",
+    "case_count": 2,
+    "raw_frequency": 2,
+    "cases": [
+      "197",
+      "268"
+    ]
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AT_BSBL_TXN",
+    "join_type": "INNER JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AT_BSBL_TXN.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AT_BSBL_TXN.PROD_TYPE_CODE",
+    "case_count": 2,
+    "cases": [
+      "196",
+      "267"
+    ],
+    "join_note": "複合 JOIN key：避免不同商品帳號（台股/複委託/期貨）造成資料膨脹"
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AT_LOAN_TXN",
+    "join_type": "INNER JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AT_LOAN_TXN.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AT_LOAN_TXN.PROD_TYPE_CODE",
+    "case_count": 2,
+    "cases": [
+      "196",
+      "267"
+    ],
+    "join_note": "複合 JOIN key：避免不同商品帳號（台股/複委託/期貨）造成資料膨脹"
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AT_BOND_TXN",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AT_BOND_TXN.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AT_BOND_TXN.PROD_TYPE_CODE",
+    "case_count": 2,
+    "cases": [
+      "202",
+      "208"
+    ],
+    "join_note": "複合 JOIN key：避免不同商品帳號（台股/複委託/期貨）造成資料膨脹；可改用 PARTY_ID 做跨帳號彙總",
+    "condition_variants": {
+      "M_AC_ACCOUNT.ACCT_NBR = M_AT_BOND_TXN.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AT_BOND_TXN.PROD_TYPE_CODE": "帳號為單位",
+      "M_AC_ACCOUNT.PARTY_ID = M_AT_BOND_TXN.PARTY_ID": "人為單位（跨帳號彙總）"
+    }
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AT_FUTURE_TXN",
+    "join_type": "INNER JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AT_FUTURE_TXN.FUTURE_ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AT_FUTURE_TXN.PROD_TYPE_CODE",
+    "case_count": 2,
+    "cases": [
+      "196",
+      "267"
+    ],
+    "join_note": "期貨帳號欄位為 FUTURE_ACCT_NBR，非 ACCT_NBR"
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AT_ACCOUNT_TXN",
+    "join_type": "INNER JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AT_ACCOUNT_TXN.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AT_ACCOUNT_TXN.PROD_TYPE_CODE",
+    "case_count": 1,
+    "raw_frequency": 3,
+    "cases": [
+      "265"
+    ],
+    "join_note": "複合 JOIN key：避免不同商品帳號（台股/複委託/期貨）造成資料膨脹"
+  },
+  {
+    "table_a": "M_AC_ACCOUNT_INVENTORY",
+    "table_b": "M_PT_CUSTOMER",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT_INVENTORY.PARTY_ID = M_PT_CUSTOMER.PARTY_ID",
+    "case_count": 1,
+    "raw_frequency": 1,
+    "cases": [
+      "158"
+    ]
+  },
+  {
+    "table_a": "M_AC_ACCOUNT_ASSET",
+    "table_b": "M_RF_FUND",
+    "join_type": "INNER JOIN",
+    "condition": "M_AC_ACCOUNT_ASSET.INVE_PROD_ID = M_RF_FUND.FUND_PROD_ID",
+    "case_count": 1,
+    "raw_frequency": 1,
+    "cases": [
+      "178"
+    ]
+  },
+  {
+    "table_a": "M_AT_INSURANCE_TXN",
+    "table_b": "M_PT_CUSTOMER",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AT_INSURANCE_TXN.PARTY_ID = M_PT_CUSTOMER.PARTY_ID",
+    "case_count": 1,
+    "raw_frequency": 1,
+    "cases": [
+      "208"
+    ]
+  },
+  {
+    "table_a": "M_AC_ACCOUNT_INVENTORY",
+    "table_b": "M_RF_STOCK",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT_INVENTORY.INVE_PROD_ID = M_RF_STOCK.STOCK_PROD_ID",
+    "case_count": 1,
+    "raw_frequency": 1,
+    "cases": [
+      "259"
+    ]
+  },
+  {
+    "table_a": "M_AC_ACCOUNT_INVENTORY",
+    "table_b": "M_RF_FUND",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT_INVENTORY.INVE_PROD_ID = M_RF_FUND.FUND_PROD_ID",
+    "case_count": 1,
+    "raw_frequency": 1,
+    "cases": [
+      "266"
+    ]
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AC_ACCOUNT_INVENTORY_DLY",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AC_ACCOUNT_INVENTORY_DLY.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AC_ACCOUNT_INVENTORY_DLY.PROD_TYPE_CODE",
+    "case_count": 1,
+    "cases": [
+      "116"
+    ],
+    "join_note": "複合 JOIN key：避免不同商品帳號（台股/複委託/期貨）造成資料膨脹"
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AC_ACCOUNT_ACTU_BENEFIT",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AC_ACCOUNT_ACTU_BENEFIT.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AC_ACCOUNT_ACTU_BENEFIT.PROD_TYPE_CODE",
+    "case_count": 0,
+    "cases": [],
+    "join_note": "複合 JOIN key：避免不同商品帳號（台股/複委託/期貨）造成資料膨脹",
+    "inferred": true
+  },
+  {
+    "table_a": "M_AC_ACCOUNT",
+    "table_b": "M_AC_ACCOUNT_PROD_INFO",
+    "join_type": "LEFT JOIN",
+    "condition": "M_AC_ACCOUNT.ACCT_NBR = M_AC_ACCOUNT_PROD_INFO.ACCT_NBR AND M_AC_ACCOUNT.PROD_TYPE_CODE = M_AC_ACCOUNT_PROD_INFO.PROD_TYPE_CODE",
+    "case_count": 0,
+    "cases": [],
+    "join_note": "複合 JOIN key：避免不同商品帳號（台股/複委託/期貨）造成資料膨脹",
+    "inferred": true
+  }
+]

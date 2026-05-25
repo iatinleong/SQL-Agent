@@ -13,28 +13,53 @@
       │
       ▼
 ┌─────────────────────────────────────────────────────┐
+│  實體擷取（entity_extractor.py）                     │
+│  product_catalog  → 商品代碼 + 商品專屬表格           │
+│  concept_routing  → 業務概念 → 相關表格               │
+│  branch_mapping   → 分公司名稱 → BRANCH_NAME 提示     │
+│  → extra_tables（追加進候選池）                       │
+│  → enriched_entities 文字（注入 Step A）              │
+└──────────────────────┬──────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────┐
 │  Phase 1：場景分類                                   │
 │  LLM (gpt-5-mini) 將需求分類到 7 個業務場景          │
 │  → 主要場景 + 次要場景（0.4 gap 規則）               │
+│  → 主要場景傳給 Step A，觸發 business_skills 規則    │
 └──────────────────────┬──────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────┐
-│  Phase 3：向量檢索                                   │
+│  Phase 2：向量檢索（用原始需求，不用改寫版）          │
 │  用 BGE-M3 對需求文字做 cosine 相似度搜尋            │
 │  → 從 92 筆歷史案例中找出 Top-5 最相似案例           │
+│  → Top-5 案例 union tables ∪ extra_tables = 候選池   │
 └──────────────────────┬──────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────┐
-│  Table Selection（評測中）                           │
-│  LLM 根據需求文字 + 32 張表格說明                    │
-│  → 選出這份報表需要用到的表格清單                    │
+│  Step A：草稿生成                                    │
+│  注入：                                              │
+│    [實體] enriched_entities（商品/概念/分公司提示）  │
+│    [規則] business_skills（場景/關鍵字觸發）         │
+│    [指標] metrics.json（全部注入，~800 tokens）      │
+│    [JOIN]  relationships.json（依候選池過濾）        │
+│    [Schema] 候選池欄位定義（中英文名 + 說明）        │
+│  LLM 從候選池自由選表、寫 SQL，並給出思路            │
 └──────────────────────┬──────────────────────────────┘
                        │
                        ▼
-              [輸出：相似案例 + 建議表格]
-              （供工程師參考生成 SQL）
+┌─────────────────────────────────────────────────────┐
+│  Step B：自我批判                                    │
+│  注入：Step A SQL + 思路                             │
+│       Top-5 案例原始 SQL（僅供參考，非標準答案）     │
+│       所有涉及表格欄位定義（含中英文欄位名、定義）   │
+│  LLM 自我批判 → 輸出最終 SQL                        │
+└──────────────────────┬──────────────────────────────┘
+                       │
+                       ▼
+              [輸出：最終 Oracle SQL]
 ```
 
 ---
@@ -66,6 +91,32 @@ all_cases_embeddings.npz
 
 ---
 
+### 實體擷取（entity_extractor.py）
+
+在 Phase 1 分類之後、Step A 生成之前執行，為後續步驟提供結構化提示。
+
+**輸入：** 需求文字
+
+**偵測邏輯：**
+
+| 來源 | 偵測方式 | 產出 |
+|------|---------|------|
+| `product_catalog.json` | 別名字串比對（台股、基金、複委託…） | PROD_TYPE_CODE / PROD_MTYPE_CODE 提示 + 商品專屬表 |
+| `concept_routing.json` | 關鍵字比對（月均交易量、配息、庫存…） | 業務概念相關表格 |
+| 分公司偵測 | 取後綴前 2 個漢字（`XX分公司/分行`） | BRANCH_NAME='XX分公司' 提示 |
+| `branch_mapping.json` | 若存在，查詢分公司→BRANCH_CODE 對照 | BRANCH_CODE 提示（精確代碼） |
+
+**輸出：**
+- `extra_tables`：追加進候選池（與 Top-5 union tables 聯集）
+- `enriched_entities`：注入 Step A 的【偵測到的商品/業務概念/分公司/WHERE 提示】文字區塊
+- `codes`：dict，如 `{"BRANCH_NAME": "竹北分公司", "PROD_TYPE_CODE": "100"}`
+
+**注意：** Phase 2 向量檢索仍使用**原始需求**（不用擴充版），因為 BGE-M3 對中文語義已足夠，加入代碼反而損害相似度計算。
+
+**相關檔案：** `agent/entity_extractor.py`, `product_catalog.json`, `concept_routing.json`, `branch_mapping.json`（選用）
+
+---
+
 ### Phase 1：場景分類
 
 **輸入：** 業務員的需求文字
@@ -74,6 +125,7 @@ all_cases_embeddings.npz
 - LLM 對照 taxonomy.json 中定義的 7 個業務場景，輸出 Pydantic 結構
 - 回傳主要場景、次要場景、各場景置信度分數
 - **0.4 gap 規則**：若主要場景分數 − 次要場景分數 ≥ 0.4，丟棄次要場景（主場景太明顯時不需要混入次要類別）
+- 主要場景回傳給 `generate()`，用於觸發 `business_skills.json` 的場景型規則
 
 **7 個業務場景：**
 1. 精準行銷與專案名單篩選
@@ -98,14 +150,15 @@ all_cases_embeddings.npz
 
 ---
 
-### Phase 3：向量檢索
+### Phase 2：向量檢索
 
-**輸入：** 需求文字（自然語言）
+**輸入：** 需求文字（原始，不加工）
 
 **處理：**
 1. 用 BGE-M3 將需求文字 embed 成 1024 維向量
 2. 與 92 筆歷史案例的 embedding（預先計算，cached in npz）做 cosine 相似度
 3. 回傳 Top-5 最相似案例
+4. 取 Top-5 案例 SQL 中出現的表格聯集 ∪ `extra_tables`（實體擷取追加），作為 Step A 的候選池
 
 **為什麼用 LLM 摘要而非直接向量化原始需求？**
 
@@ -118,53 +171,107 @@ all_cases_embeddings.npz
 - 不寫具體 Top-N 數字（寫「前 N 大客戶」）
 - 允許寫分公司名稱（不同分公司報表風格不同，是有效資訊）
 
-**範例：**
-```
-輸入：「查詢南港分公司3月份台股交易量前50大客戶」
-
-Top-5 檢索結果：
-  #1 [案例143] score=0.923  青埔現貨前N大客戶交易量與衰退分析
-  #2 [案例116] score=0.871  台股交易量月均比較與動能偵測
-  #3 [案例192] score=0.842  分公司市佔率與交易排名報表
-  #4 [案例113] score=0.819  分公司客戶交易統計明細
-  #5 [案例146] score=0.801  客戶庫存與交易量追蹤
-```
-
 **相關檔案：** `retriever.py`, `summarizer.py`, `case_summaries/`
 
 ---
 
-### Table Selection（評測中）
+### Step A：草稿生成
 
-**輸入：** 需求文字 + 32 張表格說明
+**輸入（依注入順序）：**
+
+| 區塊 | 來源 | 觸發方式 |
+|------|------|---------|
+| 報表需求 | 使用者原始輸入 | 永遠 |
+| 偵測到的實體 | `entity_extractor.py` | 有偵測到才注入 |
+| 業務技能規則 | `business_skills.json` | 場景名稱 match OR 關鍵字 match |
+| 業務指標計算規則 | `metrics.json` | 永遠（全部，~800 tokens） |
+| 表格關聯關係 | `relationships.json` | 依候選池過濾（兩端表格都在候選池才注入） |
+| 候選池欄位定義 | `schema.csv` | 候選池內所有表格 |
 
 **處理：**
-- 將所有表格說明一次性送給 LLM
-- LLM 根據需求判斷需要哪些表格，回傳 JSON 陣列
-- 過濾幻覺（只保留 available 範圍內的表格名稱）
+- LLM 從候選池自由選擇合適的表格，寫出 Oracle SQL
+- 同時輸出設計思路（選表原因、JOIN 條件、時間篩選、聚合邏輯）
 
-**32 張表格來源：**
-- 30 張：schema.csv 中被歷史 SQL 實際使用過的表
-- 2 張：自訂客群貼標表（經紀客群、財管客群）
-
-**範例：**
+**輸出格式：**
 ```
-輸入：「查詢ABC經紀客群的客戶明細，包含歷年交易量」
+--- SQL ---
+（完整 Oracle SQL）
 
-LLM 回傳：
-  ["M_AC_ACCOUNT",
-   "M_AT_STOCK_TXN",
-   "S_ARIELSHAO.CUSTOMER_GROUP_2026Q1"]
-
-Ground truth（SQL實際用到）：
-  M_AC_ACCOUNT, M_AC_ACCOUNT_ACTU_BENEFIT,
-  M_AT_BOND_TXN, M_AT_FUND_TXN, M_AT_INSURANCE_TXN,
-  M_AT_SN_TXN, M_AT_STOCK_TXN,
-  S_ARIELSHAO.CUSTOMER_GROUP_2026Q1,
-  S_MELODYJJJIAN.CUSTOMER_GROUP_2026
+--- 思路 ---
+（設計說明）
 ```
 
-**相關檔案：** `eval_table_selection.py`, `schema_summarizer.py`, `table_summaries/`
+**相關檔案：** `generator.py`, `business_skills.json`, `metrics.json`, `relationships.json`
+
+---
+
+### Step B：自我批判
+
+**輸入：**
+- Step A 產出的 SQL + 思路
+- Top-5 案例原始 SQL（語義相似，僅供參考，非標準答案）
+- 所有涉及表格的完整欄位定義（候選池 + 案例中出現的表格，含中英文欄位名及定義）
+
+**處理：**
+1. LLM 比較自身思路與參考案例的差異
+2. 分析 JOIN 條件、篩選邏輯是否一致或有可改進之處
+3. 以需求與欄位定義為最終判斷依據（案例僅供參考）
+4. 輸出分析說明 + 最終版 SQL
+
+**輸出格式：**
+```
+--- 分析 ---
+（比較與改進說明）
+
+--- 最終 SQL ---
+（最終版完整 Oracle SQL）
+```
+
+**相關檔案：** `generator.py`
+
+---
+
+## MDL（Metadata Layer）說明
+
+系統維護五個 metadata 檔案，分屬不同抽象層次：
+
+| 檔案 | 層次 | 用途 | 觸發方式 |
+|------|------|------|---------|
+| `product_catalog.json` | 實體層 | 商品名稱 → 代碼 + 專屬表格 | 別名字串比對 |
+| `concept_routing.json` | 實體層 | 業務概念關鍵字 → 相關表格 | 關鍵字比對 |
+| `relationships.json` | JOIN 層 | 表格間的 JOIN 條件與注意事項 | 候選池過濾（兩端表格都在才注入）|
+| `metrics.json` | 計算層 | 指標計算公式、欄位語意區分 | 永遠全部注入（避免遺漏關鍵規則）|
+| `business_skills.json` | 模式層 | 複雜 SQL 結構的完整範本（CTE 結構、PIVOT 格式等）| 場景名稱 OR 關鍵字觸發 |
+
+### 各檔案職責邊界
+
+**product_catalog.json（9 個商品）**
+- 「台股」/「複委託」/「基金」等別名 → PROD_TYPE_CODE / PROD_MTYPE_CODE / TXN_TYPE_CODE
+- 每個商品對應的交易明細表（M_AT_STOCK_TXN、M_AT_FUND_TXN 等）
+- 用途：讓 entity_extractor 在 Phase 2 前追加正確的商品專屬表到候選池
+
+**concept_routing.json（32 個概念）**
+- 「市佔率」→ M_RF_MARKET_SHARE、「配息」→ M_AT_DIV、「營業員」→ M_PT_SALES 等
+- 業務概念關鍵字與資料表的直接對應
+- 用途：補足向量檢索可能遺漏的低頻業務表格
+
+**relationships.json**
+- 表格間的 JOIN 條件（ON 欄位、JOIN 型態、注意事項）
+- **重要：** ACCT_NBR + PROD_TYPE_CODE 複合 JOIN key 防止多商品帳號資料爆炸
+- 候選池過濾：只注入兩端表格都在候選池的 JOIN 規則（LLM 不會用到 schema 以外的表）
+
+**metrics.json（12 條規則）**
+- 非直覺指標的計算公式，例如：
+  - `rev_amt_twd` vs `txn_amt_twd`：同在 M_AC_ACCOUNT_REVENUE，語意完全不同
+  - `COUNT(DISTINCT party_id_mask)` 不重複客戶 vs `COUNT(DISTINCT acct_nbr)` 不重複帳戶
+  - `M_AC_ACCOUNT.last_txn_date` 直接用，不須 JOIN 交易表取 MAX
+  - 市佔率分母來自 M_RF_MARKET_SHARE，不是自行 SUM
+- 永遠全部注入，因為遺漏規則會導致 LLM 靜默產出錯誤公式
+
+**business_skills.json（12 條規則）**
+- 複雜場景的完整 SQL 結構範本（如例行性報表需要哪些 CTE、離職營業員查詢的三來源聯集等）
+- 場景觸發：trigger_scenes 比對 Phase 1 主要場景
+- 關鍵字觸發：trigger_keywords 比對需求文字（月均、離職、促轉、開戶等）
 
 ---
 
@@ -175,10 +282,17 @@ SQLagentnew/
 │
 ├── all_cases.json              # 92 筆歷史案例（需求 + SQL）
 ├── all_cases_embeddings.npz    # 92 筆案例的 BGE-M3 向量 cache
-├── schema.csv                  # 73 張表格定義（欄位名、中文名、說明）
+├── schema.csv                  # 75 張表格定義（73張原始 + 2張自訂客群貼標表欄位）
 ├── used_tables.txt             # 30 張被 SQL 實際使用的表名清單
 │
-├── case_summaries/             # 92 筆 LLM 業務摘要（Phase 3 索引源）
+├── product_catalog.json        # MDL：9 個商品的別名、代碼、對應表格
+├── concept_routing.json        # MDL：32 個業務概念關鍵字 → 相關表格
+├── relationships.json          # MDL：表格 JOIN 條件（兩端表格都在候選池才注入）
+├── metrics.json                # MDL：12 條指標計算規則（永遠全部注入）
+├── business_skills.json        # MDL：12 條複雜 SQL 結構規則（場景/關鍵字觸發）
+├── branch_mapping.json         # 選用：分公司名稱 → BRANCH_CODE 對照
+│
+├── case_summaries/             # 92 筆 LLM 業務摘要（Phase 2 索引源）
 │   ├── 113.txt
 │   ├── 116.txt
 │   └── ...
@@ -194,16 +308,19 @@ SQLagentnew/
 │   └── 20250523_120000_eval_table_selection.json
 │
 └── agent/
-    ├── config.py               # 模型、路徑、費率設定
+    ├── config.py               # 模型、路徑、費率設定（GENERATION_MODEL=o3）
     ├── classifier.py           # Phase 1 場景分類
     ├── pool_filter.py          # 0.4 gap 規則 + 候選池建立
     ├── summarizer.py           # Case 業務摘要（LLM）
     ├── retriever.py            # BGE-M3 向量檢索
     ├── schema_summarizer.py    # Table 業務說明（LLM）+ raw schema 載入
-    ├── eval_table_selection.py # Table selection 準確度評測
-    ├── eval_retrieval.py       # 向量檢索準確度評測（無 LLM）
-    ├── batch_test.py           # 10 案例批次評測（P1 + P3）
-    └── main.py                 # CLI 入口
+    ├── entity_extractor.py     # 實體擷取：商品/概念/分公司 → extra_tables + 提示
+    ├── generator.py            # Step A + Step B SQL 生成
+    ├── eval_table_selection.py         # Table selection 準確度評測
+    ├── eval_retrieval.py               # 向量檢索準確度評測（無 LLM）
+    ├── eval_retrieval_table_overlap.py # 檢索案例 table 聯集對 ground truth 的覆蓋率評測
+    ├── batch_test.py                   # 10 案例批次評測（Phase 1 + Phase 2）
+    └── main.py                         # CLI 入口
 ```
 
 ---
@@ -211,14 +328,22 @@ SQLagentnew/
 ## CLI 指令速查
 
 ```bash
-# 單筆查詢（Phase 1 + Phase 3）
+# 單筆查詢（Phase 1 + Phase 2）
 python -m agent "幫我拉南港分公司台股交易量排名"
 
-# 批次評測（10 筆固定案例，P1 + P3）
+# 完整生成（實體擷取 + Phase 1 + Phase 2 + Step A + Step B）
+python -m agent --generate "幫我拉南港分公司台股交易量排名"
+python -m agent --generate "需求文字" --model=o3      # 指定模型（預設 o3）
+
+# 批次評測（10 筆固定案例，Phase 1 + Phase 2）
 python -m agent --test
 
 # 全庫向量檢索評測（92 筆，無 LLM 花費）
 python -m agent --eval-retrieval
+
+# 檢索案例 table 聯集覆蓋率評測（讀已有的 eval_retrieval JSON，無 LLM）
+python -m agent --eval-retrieval-overlap
+python -m agent --eval-retrieval-overlap experiment/20260523_011716_eval_retrieval.json  # 指定檔案
 
 # Table selection 評測（LLM summary 模式）
 python -m agent --eval-table-selection
@@ -244,6 +369,12 @@ python -m agent --schema-summarize M_AC_ACCOUNT --force
 - **命中率**：用自身需求查詢，自身出現在 Top-5 的比例
 - **平均排名**：命中案例的平均 rank
 - 目前成績：**92/92 (100%)，平均排名 1.0**
+
+### 檢索 Table 覆蓋率（eval_retrieval_table_overlap）
+- **Union Recall**：Top-5 中排除自身的其餘案例，其 SQL tables 聯集能覆蓋幾張 ground truth table
+- 邏輯：自身在 Top-5 → 排除自身取剩餘 4 筆；自身不在 Top-5 → 取全部 5 筆
+- 資料來源：讀取已有的 eval_retrieval JSON，不重跑向量檢索
+- 目的：驗證「把相似案例給 LLM 看」是否能提供足夠的 table 線索
 
 ### Table Selection（eval_table_selection）
 - **Precision**：LLM 選出的表中，有幾張真的用到

@@ -1,0 +1,149 @@
+[
+  {
+    "name": "交易金額加總",
+    "expression": "SUM(txn_amt_twd)",
+    "source_options": [
+      {
+        "table": "M_AC_ACCOUNT_REVENUE",
+        "time_column": "snap_yyyymm",
+        "note": "月彙總（已按月加總），適合查某月或某段月份的業績"
+      },
+      {
+        "table": "M_AT_STOCK_TXN / M_AT_BOND_TXN / M_AT_FUND_TXN / M_AT_SN_TXN / M_AT_INSURANCE_TXN / M_AT_BSBL_TXN",
+        "time_column": "txn_date / txn_yyyymm",
+        "note": "交易明細層次，適合需要逐筆篩選或跨商品加總"
+      }
+    ],
+    "llm_instruction": "計算交易金額加總用 SUM(txn_amt_twd)。月份彙總查詢優先用 M_AC_ACCOUNT_REVENUE + snap_yyyymm 條件；若需明細層次或跨多商品，用對應的 M_AT_*_TXN。兩者欄位名稱相同，但粒度不同。"
+  },
+  {
+    "name": "毛收入（貢獻度）",
+    "expression": "SUM(rev_amt_twd)",
+    "source_options": [
+      {
+        "table": "M_AC_ACCOUNT_REVENUE",
+        "time_column": "snap_yyyymm",
+        "note": "每帳號每月每商品一行，rev_amt_twd 為毛收入（手續費、管理費等），非交易金額"
+      }
+    ],
+    "llm_instruction": "rev_amt_twd（毛收入）與 txn_amt_twd（交易金額）同在 M_AC_ACCOUNT_REVENUE，意義完全不同：txn_amt_twd 是客戶的買賣成交金額，rev_amt_twd 是公司從該帳號賺到的收入（貢獻度）。需求提到「貢獻」、「收入」、「業績貢獻度」時用 rev_amt_twd；提到「交易量」、「成交量」時用 txn_amt_twd。"
+  },
+  {
+    "name": "月均交易量",
+    "expression": "SUM(txn_amt_twd) / 月份數",
+    "source_options": [
+      {
+        "table": "M_AC_ACCOUNT_REVENUE",
+        "time_column": "snap_yyyymm",
+        "note": "用 snap_yyyymm BETWEEN 起始月 AND 結束月 取範圍，再除以月份數"
+      }
+    ],
+    "llm_instruction": "月均交易量 = SUM(txn_amt_twd) / N，N 為觀察月份數（通常為 12 或需求指定的月數）。分母應為固定月份數（觀察期長度），而非客戶實際有交易的月份數，除非需求另有說明。"
+  },
+  {
+    "name": "市場成交量（市佔率分母）",
+    "expression": "SUM(market_stock_txns)",
+    "source_options": [
+      {
+        "table": "M_RF_MARKET_SHARE",
+        "time_column": "snap_date",
+        "note": "市場參考表，記錄全市場現貨成交量，是計算市佔率時的分母"
+      }
+    ],
+    "llm_instruction": "計算市佔率時：分子為公司客戶的 SUM(txn_amt_twd)，分母為 M_RF_MARKET_SHARE 的 SUM(market_stock_txns)。兩者需對齊相同時間範圍。M_RF_MARKET_SHARE 與業務表透過 snap_date 關聯，通常用 CROSS JOIN 或子查詢取得市場總量。"
+  },
+  {
+    "name": "不重複客戶數",
+    "expression": "COUNT(DISTINCT party_id_mask)",
+    "source_options": [
+      {
+        "table": "M_AC_ACCOUNT",
+        "note": "party_id_mask 為遮罩後的自然人識別碼，一個人有多個帳號仍只算一次"
+      }
+    ],
+    "llm_instruction": "計算不重複客戶數用 COUNT(DISTINCT party_id_mask)，而非 COUNT(DISTINCT acct_nbr)。一個客戶可能有多個商品帳號（台股、期貨、基金等），party_id_mask 確保每人只算一次。"
+  },
+  {
+    "name": "不重複帳戶數",
+    "expression": "COUNT(DISTINCT acct_nbr)",
+    "source_options": [
+      {
+        "table": "M_AC_ACCOUNT",
+        "note": "帳戶層次計數，一個客戶的不同商品帳號各算一次"
+      }
+    ],
+    "llm_instruction": "需要以帳戶為單位計數（而非以人為單位）時，用 COUNT(DISTINCT acct_nbr)。例如：計算開戶數、有效帳戶數。"
+  },
+  {
+    "name": "最後交易日",
+    "expression": "MAX(last_txn_date)",
+    "source_options": [
+      {
+        "table": "M_AC_ACCOUNT",
+        "time_column": "last_txn_date",
+        "note": "帳戶主檔直接有 last_txn_date 欄位，不須再 JOIN 交易表"
+      }
+    ],
+    "llm_instruction": "查詢客戶最後交易日直接用 M_AC_ACCOUNT.last_txn_date，不需要 JOIN M_AT_*_TXN 再取 MAX(txn_date)。若需取某商品帳號的最後交易日，在 WHERE 加 prod_type_code 條件。"
+  },
+  {
+    "name": "最早交易日",
+    "expression": "MIN(txn_date)",
+    "source_options": [
+      {
+        "table": "M_AT_STOCK_TXN / M_AT_BOND_TXN / M_AT_FUND_TXN 等",
+        "time_column": "txn_date",
+        "note": "M_AC_ACCOUNT 無首次交易日欄位，需從交易明細表取 MIN(txn_date)"
+      }
+    ],
+    "llm_instruction": "查詢客戶首次交易日（最早交易日）需從對應的 M_AT_*_TXN 取 MIN(txn_date)，M_AC_ACCOUNT 只有 last_txn_date 沒有首次交易日。"
+  },
+  {
+    "name": "持倉市值／總資產",
+    "expression": "me_asset_amt_twd 或 SUM(bal_amt_twd)",
+    "source_options": [
+      {
+        "table": "M_AC_ACCOUNT_ASSET",
+        "note": "資產彙總檔，me_asset_amt_twd 已是每帳號每月底的總資產市值，通常直接讀取，不須再 SUM"
+      },
+      {
+        "table": "M_AC_ACCOUNT_INVENTORY",
+        "note": "庫存明細檔，bal_amt_twd 為每筆持倉的餘額，需 SUM 才能得帳號總庫存金額"
+      }
+    ],
+    "llm_instruction": "查總資產／持倉市值：若要帳號層次的彙總，用 M_AC_ACCOUNT_ASSET.me_asset_amt_twd（每帳號每月已彙總，直接讀取）。若要明細層次（如各商品的持倉餘額），用 M_AC_ACCOUNT_INVENTORY.bal_amt_twd，此時需 SUM。兩者欄位名不同，不要混用。"
+  },
+  {
+    "name": "條件式加總與計數（CASE WHEN）",
+    "expression": "SUM(CASE WHEN 條件 THEN 值 ELSE 0 END) / COUNT(CASE WHEN 條件 THEN 1 END)",
+    "source_options": [
+      {
+        "table": "M_AC_ACCOUNT_REVENUE / M_AT_*_TXN / M_AC_ACCOUNT",
+        "note": "按月份、商品類型、篩選條件分欄時的通用模式"
+      }
+    ],
+    "llm_instruction": "需要按月份或商品類型分欄顯示時，用 SUM(CASE WHEN snap_yyyymm='YYYYMM' THEN txn_amt_twd END) 模式。計數條件成立的筆數用 COUNT(CASE WHEN 條件 THEN 1 END)，例如：COUNT(CASE WHEN prod_type_code='110' THEN 1 END) AS 台股開戶數。NVL(SUM(...), 0) 或 NVL(COUNT(...), 0) 處理無資料時的 NULL。優先使用此模式，不建議 PIVOT（Oracle PIVOT 需靜態值列舉，彈性差）。"
+  },
+  {
+    "name": "月份轉欄（PIVOT）",
+    "expression": "PIVOT (MAX(txn_amt_twd) FOR snap_yyyymm IN ('202501' AS jan, ...))",
+    "source_options": [
+      {
+        "table": "M_AC_ACCOUNT_REVENUE / M_AT_*_TXN",
+        "note": "Oracle 原生 PIVOT 語法，月份值需靜態列舉"
+      }
+    ],
+    "llm_instruction": "Oracle PIVOT 語法可將列轉欄，歷史案例中有使用，但月份值必須靜態列舉（不能動態）。若月份範圍固定（如指定年度的 1-12 月），可使用 PIVOT；若月份範圍由需求動態決定，改用 SUM(CASE WHEN) 模式更有彈性。PIVOT 內的聚合通常為 MAX（每帳號每月只有一筆時）或 SUM。"
+  },
+  {
+    "name": "排名與去重（ROW_NUMBER / RANK）",
+    "expression": "ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...) / RANK() OVER (...)",
+    "source_options": [
+      {
+        "table": "M_AC_ACCOUNT / M_AT_*_TXN",
+        "note": "ROW_NUMBER 無並列；RANK 允許並列（同分者同名次，下一名跳號）"
+      }
+    ],
+    "llm_instruction": "取每位客戶的代表帳號（去重）：ROW_NUMBER() OVER(PARTITION BY party_id_mask ORDER BY prod_type_code, last_txn_date DESC NULLS LAST)，外層 WHERE rn = 1。按交易量排名：ROW_NUMBER() OVER(ORDER BY SUM(txn_amt_twd) DESC NULLS LAST)。若需允許並列名次（如前10名可能出現並列第10），改用 RANK()。兩者都用外層 WHERE rn <= N 或 rk <= N 取前 N 名。"
+  }
+]

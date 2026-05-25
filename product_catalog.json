@@ -1,0 +1,56 @@
+[
+  {
+    "name": "台股",
+    "aliases": ["台股", "現貨", "一般台股", "台股交易", "現貨交易", "台股交易量", "現貨交易量", "股票交易", "衰退", "ETF"],
+    "codes": {"PROD_TYPE_CODE": "100", "PROD_MTYPE_CODE": "110"},
+    "tables": ["M_AT_STOCK_TXN", "M_AT_ACCOUNT_TXN"]
+  },
+  {
+    "name": "複委託海外股",
+    "aliases": ["複委託", "海外股票", "美股", "複委託股票", "複委託海外股", "海外股"],
+    "codes": {"PROD_TYPE_CODE": "200", "PROD_MTYPE_CODE": "210"},
+    "tables": ["M_AT_STOCK_TXN", "M_AT_ACCOUNT_TXN"]
+  },
+  {
+    "name": "海外債",
+    "aliases": ["海外債", "海外債券", "債券", "美元債", "美元債券", "複委託債券"],
+    "codes": {"PROD_MTYPE_CODE": "230"},
+    "tables": ["M_AT_BOND_TXN", "M_AT_ACCOUNT_TXN"]
+  },
+  {
+    "name": "基金",
+    "aliases": ["基金", "境內基金", "集保基金", "境外基金", "信託基金", "信託境內外基金", "複委託境外基金"],
+    "codes": {"PROD_MTYPE_CODE": "120"},
+    "tables": ["M_AT_FUND_TXN", "M_AT_ACCOUNT_TXN"]
+  },
+  {
+    "name": "結構型商品",
+    "aliases": ["結構型", "結構型商品", "ELN", "FCN", "境內結構型", "境外結構型"],
+    "codes": {"PROD_MTYPE_CODE": "540"},
+    "tables": ["M_AT_SN_TXN", "M_AT_ACCOUNT_TXN"]
+  },
+  {
+    "name": "壽險",
+    "aliases": ["壽險"],
+    "codes": {"PROD_TYPE_CODE": "600", "PROD_MTYPE_CODE": "6L0"},
+    "tables": ["M_AT_INSURANCE_TXN"]
+  },
+  {
+    "name": "期貨選擇權",
+    "aliases": ["期貨", "國內期貨", "國外期貨", "選擇權"],
+    "codes": {"PROD_TYPE_CODE": "300"},
+    "tables": ["M_AT_FUTURE_TXN"]
+  },
+  {
+    "name": "借券借貸",
+    "aliases": ["借券", "借貸", "不限用途", "雙向借券", "不限用途借貸"],
+    "codes": {"PROD_MTYPE_CODE": "150"},
+    "tables": ["M_AT_BSBL_TXN", "M_AT_LOAN_TXN"]
+  },
+  {
+    "name": "定期定額",
+    "aliases": ["定期定額"],
+    "codes": {"TXN_TYPE_CODE": "102"},
+    "tables": ["M_AT_STOCK_TXN"]
+  }
+]

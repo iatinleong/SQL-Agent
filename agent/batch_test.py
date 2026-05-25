@@ -1,4 +1,4 @@
-"""批次評測：Phase 1 場景分類 + Phase 3 向量檢索。
+"""批次評測：Phase 1 場景分類 + Phase 2 向量檢索。
 
 命中定義：用 test case 自己的需求文字去檢索，看自身能否出現在 Top-5（自身排名）。
 """
@@ -72,7 +72,7 @@ def run_batch_test() -> list[dict]:
         secondary = resolve_secondary_scene(classification)
         print(f"  P1：{'✓' if p1_hit else '✗'}  {predicted}（次要：{secondary or '無'}）")
 
-        # ── Phase 3：全庫向量檢索 Top-5 ──────────────────────────────────
+        # ── Phase 2：全庫向量檢索 Top-5 ──────────────────────────────────
         hits = retrieve(req_text, all_cases, top_k=5)
 
         self_rank: int | None = None

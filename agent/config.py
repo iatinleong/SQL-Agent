@@ -26,6 +26,7 @@ TAXONOMY_PATH: Path = BASE_DIR / "taxonomy.json"
 # ── 模型 ─────────────────────────────────────────────────────────────────────
 CLASSIFICATION_MODEL: str = "gpt-5-mini"
 TABLE_SELECTION_MODEL: str = "gpt-5.4"
+GENERATION_MODEL: str = "o3"
 
 # ── 模型費率（每百萬 token，USD）────────────────────────────────────────────
 MODEL_PRICING: dict[str, tuple[float, float]] = {

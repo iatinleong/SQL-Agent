@@ -1,0 +1,123 @@
+需求：我要找出竹北分公司的每個營業員月均交易量大於50萬的客戶數
+
+=== Phase 1：場景分類 ===
+主要場景：交易動能趨勢與異動偵測
+次要場景：市佔率與交易排名分析（採用）
+分類理由：需求以月均交易量門檻（>50萬）來篩選客戶並按竹北分公司、每位營業員彙總客戶數，這屬於交易動能類別中常見的月均交易量門檻篩選。次要關聯為市佔/交易排名類，因為輸出按營業員彙總的交易活躍客戶數也涉及交易量分佈與績效觀測。
+
+各場景置信度：
+  交易動能趨勢與異動偵測      0.50  ████████████░░░░░░░░░░░░ <<主
+  市佔率與交易排名分析       0.30  ███████░░░░░░░░░░░░░░░░░ <<次
+  精準行銷與專案名單篩選      0.18  ████░░░░░░░░░░░░░░░░░░░░
+  財管商品業績與例行月報      0.02  ░░░░░░░░░░░░░░░░░░░░░░░░
+  庫存與損益明細報表        0.00  ░░░░░░░░░░░░░░░░░░░░░░░░
+  靜止戶與未實動名單        0.00  ░░░░░░░░░░░░░░░░░░░░░░░░
+  人員異動與客戶移轉管理      0.00  ░░░░░░░░░░░░░░░░░░░░░░░░
+
+=== Phase 2：向量檢索 Top-5 ===
+  [Retriever] 載入 cache：92 筆
+  #1  [198]  score=0.6526
+       協助提供嘉義分公司客戶衍生性商品開戶與實動戶數資料
+       場景：財管商品業績與例行月報
+  #2  [竹科分公司客戶交易量分析]  score=0.6425
+       查詢竹科分公司(東門+園區)客戶名單，這些客戶在2024年12月交易量達3,000萬以上，但2025年1月至今
+       場景：交易動能趨勢與異動偵測
+  #3  [客戶上送活動(2024Q4 & 2025Q1)的明細資料]  score=0.6369
+       查詢竹科分公司客戶上送活動2024Q4及2025Q1的明細資料
+       場景：精準行銷與專案名單篩選
+  #4  [板橋分公司例行性報表 - ABC客戶交易統計]  score=0.6294
+       產出板橋分公司2025ABC客戶交易統計
+       場景：交易動能趨勢與異動偵測
+  #5  [116]  score=0.6238
+       查詢3月份台股交易量較113年10-12月月均交易量多5000萬以上客戶名單，以及113年未交易但在114年1
+       場景：交易動能趨勢與異動偵測
+
+──────────────────────────────────────────────────────────────
+=== Step A：候選池草稿生成（模型：o3）===
+  候選表格（8 張）：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY_DLY, M_AC_ACCOUNT_PROD_TXN, M_AT_SN_TXN, M_AT_STOCK_TXN, M_PT_SALES, M_RF_DATE, S_ARIELSHAO.CUSTOMER_GROUP_2026Q1
+  tokens：in=13969  out=2332
+
+/* 竹北分公司 ‒ 各營業員近 12 個月份
+   「月均交易金額 > 500,000 元」之客戶(帳號)數             */
+
+WITH  /* 1. 取最新一筆交易月份與往前 11 個月份做為觀察期間 */
+max_month AS (
+    SELECT MAX(SNAP_YYYYMM) AS max_yyyymm
+      FROM M_AC_ACCOUNT_PROD_TXN
+), period AS (
+    SELECT  max_yyyymm,
+            /* 往前推 11 個月，共 12 個月份 */
+            TO_CHAR( ADD_MONTHS( TO_DATE(max_yyyymm||'01','YYYYMMDD') , -11 )
+                   , 'YYYYMM') AS min_yyyym...
+
+──────────────────────────────────────────────────────────────
+=== Step B：自我批判（注入 5 筆參考案例）===
+  完整表格範圍（8 張）：M_AC_ACCOUNT, M_AC_ACCOUNT_INVENTORY_DLY, M_AC_ACCOUNT_PROD_TXN, M_AT_SN_TXN, M_AT_STOCK_TXN, M_PT_SALES, M_RF_DATE, S_ARIELSHAO.CUSTOMER_GROUP_2026Q1
+  tokens：in=17819  out=3374
+
+══════════════════════════════════════════════════════════════
+=== 最終 SQL ===
+```sql
+/* 竹北分公司 ─ 各營業員近 12 個月份
+   「月均交易金額 > 500,000 元」之客戶(帳號)數                           */
+
+WITH /* 1. 最近 12 個月份區間(含當月) */
+max_mon AS (
+    SELECT MAX(SNAP_YYYYMM) AS max_yyyymm
+    FROM   DM_S_VIEW.M_AC_ACCOUNT_PROD_TXN        -- 交易歸戶檔
+),
+period AS (
+    SELECT  max_yyyymm,
+            TO_CHAR( ADD_MONTHS(TO_DATE(max_yyyymm||'01','YYYYMMDD'),-11)
+                   ,'YYYYMM')       AS min_yyyymm
+    FROM    max_mon
+),
+
+/* 2. 竹北分公司 ─ 有效帳戶(取帳戶主檔最新快照) */
+acct_base AS (
+    SELECT  ACCT_NBR ,
+            SALES_NBR ,
+            SALES_NAME
+    FROM    DM_S_VIEW.M_AC_ACCOUNT
+    WHERE   SNAP_DATE        = (SELECT MAX(SNAP_DATE)
+                                FROM DM_S_VIEW.M_AC_ACCOUNT)
+      AND   ACCT_VALID_FLAG  = 'Y'
+      AND   BRANCH_NAME      = '竹北分公司'
+),
+
+/* 3. 帳號 12 個月總交易金額 */
+acct_12m_txn AS (
+    SELECT  a.SALES_NBR ,
+            a.SALES_NAME ,
+            t.ACCT_NBR ,
+            SUM(t.TXN_AMT_TWD) AS total_txn_amt
+    FROM        acct_base           a
+    JOIN        DM_S_VIEW.M_AC_ACCOUNT_PROD_TXN t
+           ON   t.ACCT_NBR = a.ACCT_NBR
+    CROSS JOIN  period              p
+    WHERE       t.SNAP_YYYYMM BETWEEN p.min_yyyymm AND p.max_yyyymm
+    GROUP BY    a.SALES_NBR ,
+                a.SALES_NAME ,
+                t.ACCT_NBR
+),
+
+/* 4. 換算月均並先行篩選 > 50 萬 */
+acct_avg_txn AS (
+    SELECT  SALES_NBR ,
+            SALES_NAME ,
+            ACCT_NBR ,
+            total_txn_amt / 12 AS avg_month_txn_amt
+    FROM    acct_12m_txn
+    WHERE   total_txn_amt / 12 > 500000          -- 月均 > 50 萬
+)
+
+/* 5. 依營業員統計客戶(帳號)數 */
+SELECT  SALES_NBR      AS 營業員代碼 ,
+        SALES_NAME     AS 營業員姓名 ,
+        COUNT(DISTINCT ACCT_NBR) AS 月均交易量大於50萬之客戶數
+FROM    acct_avg_txn
+GROUP   BY SALES_NBR , SALES_NAME
+ORDER   BY 月均交易量大於50萬之客戶數 DESC ,
+         SALES_NBR;
+```
+══════════════════════════════════════════════════════════════

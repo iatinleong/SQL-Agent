@@ -1,11 +1,12 @@
 """CLI 入口。
 
 指令：
-  python -m agent                          單筆範例（Phase 1 + Phase 3）
-  python -m agent "需求文字"                自由文字（Phase 1 + Phase 3）
-  python -m agent path/to/req.txt          讀檔（Phase 1 + Phase 3）
+  python -m agent                          單筆範例（Phase 1 + Phase 2）
+  python -m agent "需求文字"                自由文字（Phase 1 + Phase 2）
+  python -m agent path/to/req.txt          讀檔（Phase 1 + Phase 2）
+  python -m agent --generate "需求文字"    完整生成（Phase 1 + Phase 2 + Step A + Step B）
   python -m agent --summarize              批次產出所有案例的業務摘要（需先跑一次）
-  python -m agent --test                   10 案例批次評測（Phase 1 + Phase 3）
+  python -m agent --test                   10 案例批次評測（Phase 1 + Phase 2）
   python -m agent --schema-summarize          批次產出所有 schema 表格說明
   python -m agent --schema-summarize TABLE    只跑指定表格
   python -m agent --eval-table-selection      LLM table selection 準確度評測
@@ -29,7 +30,8 @@ from .retriever import retrieve
 SEP = "─" * 62
 
 
-def run(requirement: Union[str, dict]) -> None:
+def run(requirement: Union[str, dict]) -> tuple | None:
+    """Phase 1 + Phase 2。回傳 (hits, all_cases, primary_scene) 供後續生成使用。"""
     with open(ALL_CASES_PATH, encoding="utf-8") as f:
         all_cases = _json.load(f)
 
@@ -38,25 +40,25 @@ def run(requirement: Union[str, dict]) -> None:
 
     # Phase 1
     print("=== Phase 1：場景分類 ===")
-    result = classify_intent(requirement)
-    print(f"主要場景：{result.主要場景}")
-    secondary = resolve_secondary_scene(result)
-    if result.次要場景:
+    classification = classify_intent(requirement)
+    print(f"主要場景：{classification.主要場景}")
+    secondary = resolve_secondary_scene(classification)
+    if classification.次要場景:
         status = "採用" if secondary else "捨棄（gap ≥ 0.4）"
-        print(f"次要場景：{result.次要場景}（{status}）")
-    print(f"分類理由：{result.分類理由}")
+        print(f"次要場景：{classification.次要場景}（{status}）")
+    print(f"分類理由：{classification.分類理由}")
     print("\n各場景置信度：")
-    for item in sorted(result.各標籤置信度, key=lambda x: x.分數, reverse=True):
+    for item in sorted(classification.各標籤置信度, key=lambda x: x.分數, reverse=True):
         bar = "█" * round(item.分數 * 24) + "░" * (24 - round(item.分數 * 24))
-        tag = " <<主" if item.標籤 == result.主要場景 else (" <<次" if item.標籤 == result.次要場景 else "")
+        tag = " <<主" if item.標籤 == classification.主要場景 else (" <<次" if item.標籤 == classification.次要場景 else "")
         print(f"  {item.標籤:<16} {item.分數:.2f}  {bar}{tag}")
 
-    # Phase 3
-    print("\n=== Phase 3：向量檢索 Top-5 ===")
+    # Phase 2
+    print("\n=== Phase 2：向量檢索 Top-5 ===")
     hits = retrieve(req_text, all_cases, top_k=5)
     if not hits:
         print("  （尚未建立摘要，請先執行 --summarize）")
-        return
+        return None
 
     case_map = {str(c.get("資料夾")): c for c in all_cases}
     for hit in hits:
@@ -66,6 +68,8 @@ def run(requirement: Union[str, dict]) -> None:
         print(f"  #{hit.rank}  [{hit.case_id}]  score={hit.score:.4f}")
         print(f"       {summary[:55]}")
         print(f"       場景：{scene}")
+
+    return hits, all_cases, classification.主要場景
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -90,6 +94,12 @@ def main(argv: list[str] | None = None) -> None:
         eval_main()
         return
 
+    if args and args[0] == "--eval-retrieval-overlap":
+        from .eval_retrieval_table_overlap import main as eval_overlap_main
+        json_path = next((a for a in args[1:] if not a.startswith("--")), None)
+        eval_overlap_main(retrieval_json=json_path)
+        return
+
     if args and args[0] == "--eval-table-selection":
         from .eval_table_selection import main as eval_ts_main
         eval_ts_main(use_raw_schema="--raw-schema" in args)
@@ -99,6 +109,38 @@ def main(argv: list[str] | None = None) -> None:
         from .schema_summarizer import build_table_summaries
         table_names = [a for a in args[1:] if not a.startswith("--")] or None
         build_table_summaries(table_names=table_names, force="--force" in args)
+        return
+
+    if args and args[0] == "--generate":
+        from .generator import generate
+        from .config import GENERATION_MODEL
+        rest = args[1:]
+        model = next((a.split("=", 1)[1] for a in rest if a.startswith("--model=")), GENERATION_MODEL)
+        text_args = [a for a in rest if not a.startswith("--")]
+        if not text_args:
+            print("用法：python -m agent --generate \"需求文字\"")
+            return
+        req_arg = text_args[0]
+        try:
+            with open(req_arg, encoding="utf-8") as f:
+                requirement: Union[str, dict] = f.read().strip()
+        except OSError:
+            requirement = req_arg
+
+        with log_experiment("generate") as log:
+            result = run(requirement)
+            if result is None:
+                return
+            hits, all_cases, primary_scene = result
+            gen = generate(normalize_requirement(requirement), hits, all_cases, model=model, scene=primary_scene)
+            log["candidate_tables"] = gen.candidate_tables
+            log["all_tables"] = gen.all_tables
+            log["step_a_sql"] = gen.step_a_sql
+            log["step_a_reasoning"] = gen.step_a_reasoning
+            log["final_analysis"] = gen.final_analysis
+            log["final_reasoning"] = gen.final_reasoning
+            log["final_sql"] = gen.final_sql
+            log["tokens"] = gen.tokens
         return
 
     with log_experiment("single_query") as _:

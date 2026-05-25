@@ -1,0 +1,12 @@
+[
+  {
+    "name": "複委託海外股",
+    "trigger_products": ["複委託海外股"],
+    "rule": "海外股票查詢: 主表 M_AT_STOCK_TXN, WHERE PROD_TYPE_CODE='200' AND PROD_MTYPE_CODE='210'。美股加 COUNTRY_CODE='USA'。ETF 用 M_AT_STOCK_TXN WHERE PROD_STYPE_CODE='019'"
+  },
+  {
+    "name": "定期定額",
+    "trigger_products": ["定期定額"],
+    "rule": "定期定額查詢: WHERE TXN_TYPE_CODE='102'。常見於基金(M_AT_FUND_TXN)或股票(M_AT_STOCK_TXN)"
+  }
+]
