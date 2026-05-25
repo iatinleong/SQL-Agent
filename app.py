@@ -46,6 +46,7 @@ footer, header { visibility: hidden; }
     display:flex; align-items:center; justify-content:center;
     flex-shrink:0; margin-top:2px; }
 .sa-user-text { font-size:1rem; color:#111; line-height:1.65; }
+.sa-user-ts { font-size:0.75rem; color:#aaa; margin-top:4px; }
 
 /* Intent badge */
 .sa-badge { display:inline-block; padding:2px 9px; border-radius:4px;
@@ -88,6 +89,7 @@ class Turn:
     phase2_log: str = ""
     step_a_log: str = ""
     step_b_log: str = ""
+    timestamp: str = ""
 
 
 # ── Session state ─────────────────────────────────────────────────
@@ -242,6 +244,7 @@ def _run_and_render_full(requirement: str) -> Turn | None:
         phase2_log=phase2_log,
         step_a_log=step_a_log,
         step_b_log=step_b_log,
+        timestamp=st.session_state.get("_current_ts", ""),
     )
 
 
@@ -321,6 +324,7 @@ def _run_and_render_refiner(new_query: str) -> Turn | None:
         intent=result.intent,
         modification=result.modification_note,
         phase1_log=phase1_log,
+        timestamp=st.session_state.get("_current_ts", ""),
     )
 
 
@@ -416,11 +420,12 @@ def _clean_sql(raw: str) -> str:
 
 
 def _render_turn(turn: Turn, idx: int):
-    # User
+    ts_line = (f'<div class="sa-user-ts">使用者需求提出時間：{turn.timestamp}</div>'
+               if turn.timestamp else "")
     st.markdown(
         f'<div class="sa-user">'
         f'<div class="sa-user-avatar">你</div>'
-        f'<div class="sa-user-text">{turn.user_query}</div>'
+        f'<div class="sa-user-text">{turn.user_query}{ts_line}</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -493,11 +498,14 @@ def main():
     )
 
     if prompt:
+        _now = datetime.now().strftime("%Y/%m/%d %H:%M")
+        st.session_state["_current_ts"] = _now
         st.markdown(
             f'<div class="sa-user">'
             f'<div class="sa-user-avatar">你</div>'
-            f'<div class="sa-user-text">{prompt}</div>'
-            f'</div>',
+            f'<div class="sa-user-text">{prompt}'
+            f'<div class="sa-user-ts">使用者需求提出時間：{_now}</div>'
+            f'</div></div>',
             unsafe_allow_html=True,
         )
 
