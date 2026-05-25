@@ -90,6 +90,7 @@ class Turn:
     injected_log: str = ""
     step_a_log: str = ""
     step_b_log: str = ""
+    step_c_log: list = field(default_factory=list)
     cost_usd: float = 0.0
 
 
@@ -295,6 +296,24 @@ def _confirm_and_generate(pending: dict) -> None:
     with st.expander("Step B：自我批判", expanded=False):
         st.markdown(step_b_log)
 
+    # Step C：語法驗證結果
+    step_c_log = gen.step_c_log
+    if step_c_log:
+        last = step_c_log[-1]
+        rounds = len(step_c_log)
+        if last["passed"]:
+            label = f"Step C：語法驗證　✅ 通過（{rounds} 輪）"
+        else:
+            label = f"Step C：語法驗證　❌ 未通過（{rounds} 輪後仍有問題）"
+        with st.expander(label, expanded=not last["passed"]):
+            for entry in step_c_log:
+                if entry["passed"]:
+                    st.success(f"Round {entry['round']}：語法驗證通過")
+                else:
+                    st.warning(f"Round {entry['round']}：發現 {len(entry['errors'])} 個問題")
+                    for err in entry["errors"]:
+                        st.code(err, language="text")
+
     st.markdown('<div class="sa-sql-label">最終 SQL</div>', unsafe_allow_html=True)
     st.code(_clean_sql(gen.final_sql), language="sql")
     if gen.final_reasoning:
@@ -350,6 +369,7 @@ def _confirm_and_generate(pending: dict) -> None:
         injected_log=_fmt_injected(gen.injected_summary),
         step_a_log=step_a_log,
         step_b_log=step_b_log,
+        step_c_log=gen.step_c_log,
         cost_usd=total_cost,
     )
     st.session_state.conversation.append(turn)
@@ -659,9 +679,22 @@ def _render_turn(turn: Turn, idx: int):
             ("Prompt 注入內容", turn.injected_log),
             ("Step A：草稿生成", turn.step_a_log),
             ("Step B：自我批判", turn.step_b_log),
+            ("Step C：語法驗證", turn.step_c_log),
         ]
         for label, log in log_sections:
-            if log.strip():
+            if label == "Step C：語法驗證":
+                if log:
+                    last = log[-1]
+                    icon = "✅" if last["passed"] else "❌"
+                    with st.expander(f"{label}　{icon}", expanded=False):
+                        for entry in log:
+                            if entry["passed"]:
+                                st.success(f"Round {entry['round']}：通過")
+                            else:
+                                st.warning(f"Round {entry['round']}：{len(entry['errors'])} 個問題")
+                                for err in entry["errors"]:
+                                    st.code(err, language="text")
+            elif log.strip():
                 with st.expander(label, expanded=False):
                     st.markdown(log)
 

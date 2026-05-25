@@ -83,6 +83,17 @@
 └──────────────────────┬──────────────────────────────┘
                        │
                        ▼
+┌─────────────────────────────────────────────────────┐
+│  Step C：語法驗證 + 自動修正（sql_validator.py）     │
+│  sqlglot（解析層）→ Oracle dialect parse 驗證       │
+│  sqlfluff（規則層）→ Oracle dialect lint 驗證        │
+│                                                     │
+│  通過 → 直接輸出                                    │
+│  失敗 → LLM (gpt-5-mini) 修正 → 重新驗證           │
+│         最多 3 輪，仍失敗則回傳最後修正版本          │
+└──────────────────────┬──────────────────────────────┘
+                       │
+                       ▼
               [輸出：最終 Oracle SQL]
                        │
               （使用者追問時）
@@ -312,6 +323,32 @@ all_cases_embeddings.npz
 
 ---
 
+### Step C：語法驗證 + 自動修正（sql_validator.py）
+
+**輸入：** Step B 輸出的最終 SQL
+
+**雙重驗證：**
+
+| 工具 | 層次 | 用途 |
+|------|------|------|
+| `sqlglot` | 解析層 | Oracle dialect parse，捕捉無法解析的語法結構（WITH 多 SELECT、非法函數等） |
+| `sqlfluff` | 規則層 | Oracle dialect lint，捕捉語意/結構規則違反（過濾純樣式規則如縮排、空格）|
+
+**設計原則：**
+- sqlglot 先跑；若有 parse 錯誤，不跑 sqlfluff（SQL 連解析都過不了，lint 結果無意義）
+- sqlfluff 過濾 LT / AL08 / CP / RF / CV10 / CV11 等純樣式前綴，只回報結構性問題
+
+**自動修正迴圈（最多 3 輪）：**
+1. 驗證 → 有錯 → 把錯誤訊息 + SQL 傳給 LLM (gpt-5-mini) 修正
+2. 再驗證 → 有錯 → 再修正
+3. 第 3 輪後不再修正，保留最後修正結果
+
+**tokens 追蹤：** `fix_in` / `fix_out`（多輪時累加）
+
+**相關檔案：** `agent/sql_validator.py`
+
+---
+
 ### 追問改寫（refiner.py）
 
 使用者對已生成的 SQL 提出修改要求時觸發。
@@ -338,7 +375,7 @@ all_cases_embeddings.npz
 
 ### 費用追蹤
 
-每次完整生成流程（guardrail + classify + plan × N輪 + step_a + step_b）的 token 用量與 USD 費用均被計算並寫入 Supabase `experiments` 表的 `cost_usd` 欄位。
+每次完整生成流程（guardrail + classify + plan × N輪 + step_a + step_b + fix × N輪）的 token 用量與 USD 費用均被計算並寫入 Supabase `experiments` 表的 `cost_usd` 欄位。
 
 **計算方式：**
 ```
@@ -449,7 +486,8 @@ SQLagentnew/
     ├── retriever.py            # BGE-M3 向量檢索
     ├── schema_summarizer.py    # Table 業務說明（LLM）+ raw schema 載入
     ├── entity_extractor.py     # 實體擷取：商品/概念/分公司 → extra_tables + 提示
-    ├── generator.py            # Step A + Step B SQL 生成（含費用計算）
+    ├── generator.py            # Step A + Step B + Step C SQL 生成（含費用計算）
+    ├── sql_validator.py        # Step C 語法驗證：sqlglot + sqlfluff + LLM 自動修正
     ├── report_planner.py       # Phase 3 報表需求確認：ask/confirm 多輪對話
     ├── refiner.py              # 追問改寫：意圖分類 + SQL 改寫（含費用計算）
     ├── experiment_logger.py    # 實驗 log（stdout + JSON 存 experiment/）

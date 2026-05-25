@@ -69,6 +69,7 @@ class GenerationResult:
     final_analysis: str      # Step B：與參考案例的比對差異（items 1-3）
     final_reasoning: str     # Step B：最終 SQL 設計決策與原因（item 4，獨立欄位）
     final_sql: str
+    step_c_log: list[dict] = field(default_factory=list)   # Step C：語法驗證迭代記錄
     injected_summary: dict = field(default_factory=dict)
     tokens: dict[str, int] = field(default_factory=dict)
     cost_usd: float = 0.0
@@ -533,6 +534,23 @@ def generate(
     )
     print(f"  tokens：in={b_in}  out={b_out}")
 
+    # ── Step C：語法驗證 + 自動修正 ──────────────────────────────
+    from .sql_validator import validate_and_fix
+    from .config import CLASSIFICATION_MODEL
+
+    print(f"\n{SEP}")
+    print("=== Step C：語法驗證（sqlglot + sqlfluff）===")
+    final_sql, step_c_log, fix_tokens = validate_and_fix(
+        final_sql, model=CLASSIFICATION_MODEL, max_iter=3
+    )
+    for entry in step_c_log:
+        if entry["passed"]:
+            print(f"  Round {entry['round']}：✅ 通過")
+        else:
+            print(f"  Round {entry['round']}：❌ {len(entry['errors'])} 個問題")
+            for e in entry["errors"]:
+                print(f"    {e}")
+
     print(f"\n{WIDE_SEP}")
     print("=== 最終 SQL ===")
     print(final_sql)
@@ -559,7 +577,12 @@ def generate(
     }
 
     price_in, price_out = get_model_pricing(model)
+    clf_price_in, clf_price_out = get_model_pricing(CLASSIFICATION_MODEL)
     gen_cost = (a_in + b_in) / 1_000_000 * price_in + (a_out + b_out) / 1_000_000 * price_out
+    fix_cost = (
+        fix_tokens.get("fix_in", 0) / 1_000_000 * clf_price_in
+        + fix_tokens.get("fix_out", 0) / 1_000_000 * clf_price_out
+    )
 
     return GenerationResult(
         candidate_tables=candidate_tables,
@@ -569,7 +592,12 @@ def generate(
         final_analysis=analysis,
         final_reasoning=final_reasoning,
         final_sql=final_sql,
-        tokens={"step_a_in": a_in, "step_a_out": a_out, "step_b_in": b_in, "step_b_out": b_out},
+        step_c_log=step_c_log,
+        tokens={
+            "step_a_in": a_in, "step_a_out": a_out,
+            "step_b_in": b_in, "step_b_out": b_out,
+            **fix_tokens,
+        },
         injected_summary=injected_summary,
-        cost_usd=gen_cost,
+        cost_usd=gen_cost + fix_cost,
     )
