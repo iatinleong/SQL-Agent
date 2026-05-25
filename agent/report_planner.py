@@ -1,4 +1,4 @@
-"""報表結構規劃：在生成 SQL 前，透過對話確認報表的每列粒度。"""
+"""報表結構規劃：在生成 SQL 前，透過對話確認報表需求細節。"""
 
 from __future__ import annotations
 
@@ -12,15 +12,16 @@ from .generator import _chat
 @dataclass
 class ReportPlan:
     status: str = "confirm"         # "ask" | "confirm"
-    question: str = ""              # status="ask" 時，向使用者提的問題
+    question: str = ""              # status="ask" 時，向使用者提的問題（一次一個）
     granularity: str = "其他"       # 帳戶/客戶/營業員/分公司/其他
     granularity_detail: str = ""    # 每列代表什麼（白話）
+    understanding: str = ""         # status="confirm" 時，LLM 對整份報表需求的完整理解摘要
     tokens: dict = field(default_factory=dict)
 
 
 _SYSTEM = """\
 你是一位熟悉台灣金融業報表的顧問，擅長解讀業務員需求。
-根據使用者的需求、歷史案例 SQL 與雙方的對話記錄，判斷這份報表每一列的粒度。
+根據使用者的需求、歷史案例 SQL 與雙方對話記錄，判斷是否已有足夠資訊來生成正確的報表。
 只輸出 JSON，不要其他文字。"""
 
 
@@ -47,17 +48,18 @@ def plan_report(
 【相似歷史案例 SQL（了解這類需求通常怎麼寫）】
 {sqls_text}{qa_block}
 
-請判斷這份報表每一列代表什麼粒度。判斷原則：
-- 結合需求與歷史案例，若能清楚判斷 → status="confirm"，直接輸出結果。
-- 若真的無法判斷 → status="ask"，提一個最關鍵的問題（用業務員聽得懂的話）。
-- 顯而易見的事情不需要問。盡量 confirm，只有真的不確定才 ask。
+你的任務是確認是否已有足夠資訊來生成報表。判斷原則：
+- 若有任何真正無法從需求或歷史案例中判斷的關鍵資訊（例如：時間範圍不明確、不知道要篩哪個條件、不確定業績指標的定義）→ status="ask"，提一個最重要的問題。
+- 若資訊已足夠（可合理推斷）→ status="confirm"，用白話寫出你對整份報表的完整理解。
+- 每次只問一個問題。顯而易見的事情不需要問。盡量 confirm，只有真的不確定才 ask。
 
 輸出 JSON（不要其他文字）：
 {{
   "status": "ask 或 confirm",
-  "question": "若 status=ask：一個最關鍵的問題，業務員聽得懂；否則空字串",
+  "question": "若 status=ask：一個最關鍵的問題，用業務員聽得懂的話問；否則空字串",
   "granularity": "帳戶|客戶|營業員|分公司|其他",
-  "granularity_detail": "每一列代表什麼，用業務員聽得懂的話說明，50字以內"
+  "granularity_detail": "每一列代表什麼，用業務員聽得懂的話說明，50字以內",
+  "understanding": "若 status=confirm：用白話描述你對整份報表的完整理解，包含時間範圍、篩選條件、排列方式、每列內容等，讓使用者能一眼確認是否正確；否則空字串"
 }}"""
 
     resp = _chat(
@@ -88,18 +90,20 @@ def plan_report(
         question=d.get("question", ""),
         granularity=d.get("granularity", "其他"),
         granularity_detail=d.get("granularity_detail", ""),
+        understanding=d.get("understanding", ""),
         tokens=tokens,
     )
 
 
 def fmt_plan_for_user(plan: ReportPlan) -> str:
     """轉成業務員看得懂的確認文字。"""
-    return f"**每一列代表什麼**  \n{plan.granularity_detail}"
+    return plan.understanding or f"每一列代表：{plan.granularity_detail}"
 
 
 def fmt_plan_for_prompt(plan: ReportPlan) -> str:
     """轉成注入 Step A prompt 的說明文字。"""
-    return (
-        "【報表呈現結構（使用者已確認，請嚴格遵守）】\n"
-        f"  每一列粒度：{plan.granularity}（{plan.granularity_detail}）"
-    )
+    lines = ["【報表需求理解（使用者已確認，請嚴格遵守）】"]
+    if plan.understanding:
+        lines.append(f"  {plan.understanding}")
+    lines.append(f"  每一列粒度：{plan.granularity}（{plan.granularity_detail}）")
+    return "\n".join(lines)
