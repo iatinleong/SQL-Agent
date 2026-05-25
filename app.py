@@ -668,7 +668,7 @@ def _render_turn(turn: Turn, idx: int):
         # Final SQL (直接顯示)
         st.markdown('<div class="sa-sql-label">最終 SQL</div>', unsafe_allow_html=True)
         st.code(_clean_sql(turn.sql), language="sql")
-        _sql_runner_widget(_clean_sql(turn.sql), f"turn_{idx}")
+        # _sql_runner_widget(_clean_sql(turn.sql), f"turn_{idx}")
 
         # Reasoning
         if turn.reasoning:
