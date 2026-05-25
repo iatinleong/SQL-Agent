@@ -102,6 +102,7 @@ def _init():
         "all_cases": None,
         "primary_scene": "",
         "_plan": None,
+        "_sql_results": {},
     }.items():
         if k not in st.session_state:
             st.session_state[k] = v
@@ -531,6 +532,64 @@ def _feedback_dialog():
         st.caption("請先選擇 👍 或 👎")
 
 
+# ── Oracle SQL runner ─────────────────────────────────────────────
+
+def _sql_runner_widget(sql: str, widget_key: str) -> None:
+    """執行 SQL 按鈕 + 結果顯示（結果快取在 session_state._sql_results）。"""
+    import pandas as pd
+
+    results: dict = st.session_state._sql_results
+
+    if st.button("▶ 執行 SQL", key=f"run_{widget_key}", type="secondary"):
+        if "oracle" not in st.secrets:
+            st.session_state._sql_results[widget_key] = {
+                "ok": False,
+                "error": "尚未設定 Oracle 連線，請在 .streamlit/secrets.toml 加入 [oracle] 區段。",
+            }
+        else:
+            with st.spinner("連線 Oracle 執行中…"):
+                try:
+                    import oracledb
+                    conn = oracledb.connect(
+                        user=st.secrets["oracle"]["user"],
+                        password=st.secrets["oracle"]["password"],
+                        dsn=st.secrets["oracle"]["dsn"],
+                    )
+                    with conn.cursor() as cur:
+                        cur.execute(sql)
+                        if cur.description:
+                            cols = [d[0] for d in cur.description]
+                            rows = cur.fetchmany(500)
+                            df = pd.DataFrame(rows, columns=cols)
+                            st.session_state._sql_results[widget_key] = {
+                                "ok": True, "df": df, "fetched": len(rows),
+                            }
+                        else:
+                            st.session_state._sql_results[widget_key] = {
+                                "ok": True, "df": None,
+                            }
+                    conn.close()
+                except Exception as e:
+                    st.session_state._sql_results[widget_key] = {
+                        "ok": False, "error": str(e),
+                    }
+        st.rerun()
+
+    r = results.get(widget_key)
+    if r is None:
+        return
+    if r["ok"]:
+        if r["df"] is not None:
+            fetched = r["fetched"]
+            note = f"共 {fetched} 筆" + ("（已達 500 筆上限，可能有更多）" if fetched == 500 else "")
+            st.caption(f"查詢結果　{note}")
+            st.dataframe(r["df"], use_container_width=True)
+        else:
+            st.success("執行成功（無回傳資料）")
+    else:
+        st.error(f"執行錯誤：{r['error']}")
+
+
 # ── Render ────────────────────────────────────────────────────────
 
 _BADGE = {
@@ -585,6 +644,7 @@ def _render_turn(turn: Turn, idx: int):
         # Final SQL (直接顯示)
         st.markdown('<div class="sa-sql-label">最終 SQL</div>', unsafe_allow_html=True)
         st.code(_clean_sql(turn.sql), language="sql")
+        _sql_runner_widget(_clean_sql(turn.sql), f"turn_{idx}")
 
         # Reasoning
         if turn.reasoning:
