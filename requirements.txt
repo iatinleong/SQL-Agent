@@ -7,3 +7,4 @@ numpy
 sentence-transformers
 supabase
 python-oracledb
+rich>=10.14.0,<15.0.0
