@@ -59,17 +59,25 @@ def log_experiment(name: str):
         sys.stdout = orig_stdout
         log_text = buf.getvalue()
 
+        # ── 本機檔案 ──────────────────────────────────────────────
+        EXPERIMENT_DIR.mkdir(exist_ok=True)
         txt_path = EXPERIMENT_DIR / f"{stem}.txt"
         txt_path.write_text(log_text, encoding="utf-8")
 
+        payload = {
+            "name": meta["name"],
+            "timestamp": meta["timestamp"],
+            "results": meta.get("results"),
+            "log": log_text,
+        }
         json_path = EXPERIMENT_DIR / f"{stem}.json"
         json_path.write_text(
-            json.dumps(
-                {"name": meta["name"], "timestamp": meta["timestamp"],
-                 "results": meta.get("results"), "log": log_text},
-                ensure_ascii=False, indent=2,
-            ),
+            json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
-        print(f"\n[實驗記錄] → experiment/{stem}.json / .txt")
+        # ── Supabase ──────────────────────────────────────────────
+        from . import supabase_logger
+        ok = supabase_logger.insert("experiments", payload)
+        tag = "✓ Supabase + 本機" if ok else "本機"
+        print(f"\n[實驗記錄] → {tag}  experiment/{stem}.json")

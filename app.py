@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -11,6 +12,11 @@ import streamlit as st
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
+
+# ── 將 Streamlit Secrets 同步到 os.environ（讓 agent 模組能用 os.getenv 讀取）
+for _k in ("OPENAI_API_KEY", "SUPABASE_URL", "SUPABASE_KEY"):
+    if _k not in os.environ and hasattr(st, "secrets") and _k in st.secrets:
+        os.environ[_k] = st.secrets[_k]
 
 st.set_page_config(
     page_title="SQL Agent",
@@ -286,44 +292,29 @@ def _run_and_render_refiner(new_query: str) -> Turn | None:
 # ── Save feedback ─────────────────────────────────────────────────
 
 def _save_feedback(rating: str, text: str):
+    from agent.supabase_logger import insert
+    from agent.config import BASE_DIR
+
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     turns_snapshot = [
         {"query": t.user_query, "sql": t.sql, "intent": t.intent}
         for t in st.session_state.conversation
     ]
+    payload = {
+        "timestamp": ts,
+        "rating": rating,
+        "feedback_text": text,
+        "turns": turns_snapshot,
+    }
 
-    # 嘗試寫入 Supabase（Cloud 環境）
-    supabase_url = st.secrets.get("SUPABASE_URL", "") if hasattr(st, "secrets") else ""
-    supabase_key = st.secrets.get("SUPABASE_KEY", "") if hasattr(st, "secrets") else ""
-    if not supabase_url:
-        import os
-        supabase_url = os.getenv("SUPABASE_URL", "")
-        supabase_key = os.getenv("SUPABASE_KEY", "")
+    ok = insert("feedback", payload)
 
-    if supabase_url and supabase_key:
-        try:
-            from supabase import create_client
-            client = create_client(supabase_url, supabase_key)
-            client.table("feedback").insert({
-                "timestamp": ts,
-                "rating": rating,
-                "feedback_text": text,
-                "turns": turns_snapshot,
-            }).execute()
-            return
-        except Exception as e:
-            st.warning(f"Supabase 寫入失敗，改存本機：{e}")
-
-    # Fallback：寫入本機 JSON
-    from agent.config import BASE_DIR
-    out = BASE_DIR / "experiment" / f"{ts}_feedback.json"
-    out.parent.mkdir(exist_ok=True)
-    with open(out, "w", encoding="utf-8") as f:
-        json.dump({
-            "timestamp": ts,
-            "turns": turns_snapshot,
-            "feedback": {"rating": rating, "text": text},
-        }, f, ensure_ascii=False, indent=2)
+    if not ok:
+        # Fallback：寫入本機 JSON
+        out = BASE_DIR / "experiment" / f"{ts}_feedback.json"
+        out.parent.mkdir(exist_ok=True)
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
 
 
 # ── Global feedback dialog ────────────────────────────────────────
