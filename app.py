@@ -588,7 +588,9 @@ def main():
         _gs = st.empty()
         _gs.caption("🛡️ 安全審查中…")
         from agent.guardrail import check_input
-        is_safe, reason, guardrail_tokens = check_input(prompt)
+        _guard = check_input(prompt)
+        is_safe, reason = _guard[0], _guard[1]
+        guardrail_tokens = _guard[2] if len(_guard) > 2 else {}
         _gs.empty()
 
         if not is_safe:
