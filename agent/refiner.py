@@ -27,7 +27,13 @@ _REFINE_SYSTEM = """\
 
 【Schema 規則】
 所有表格一律加上 DM_S_VIEW schema 前綴（例如 DM_S_VIEW.M_AC_ACCOUNT），
-唯一例外：表格名稱本身已含有 schema 前綴（例如 S_MELODYJJJIAN.CUSTOMER_GROUP_2026），則保持原樣不做修改。"""
+唯一例外：表格名稱本身已含有 schema 前綴（例如 S_MELODYJJJIAN.CUSTOMER_GROUP_2026），則保持原樣不做修改。
+
+【語法與效能規則】
+- 必須使用合法的 Oracle SQL 語法（禁止 MySQL / PostgreSQL 專屬語法，例如 LIMIT 應改用 ROWNUM 或 FETCH FIRST N ROWS ONLY）。
+- 避免全表掃描：WHERE 條件應優先使用有索引的欄位（如日期、帳號、分公司代碼）。
+- 大量 JOIN 時優先過濾後再 JOIN，減少中間結果集大小。
+- 若需排名請使用 ROW_NUMBER() / RANK() OVER(...)，不要使用效能差的關聯子查詢。"""
 
 
 @dataclass
