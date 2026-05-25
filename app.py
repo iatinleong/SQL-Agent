@@ -221,11 +221,16 @@ def _start_new_query(prompt: str, guardrail_tokens: dict | None = None) -> None:
         with st.expander("Phase 2：向量檢索", expanded=False):
             st.markdown(phase2_log)
 
+        # 實體擷取（Phase 3 需要這些資訊，才不會問已知的代碼）
+        from agent.entity_extractor import extract_entities
+        extraction = extract_entities(req_text)
+        entities_text = extraction.enriched_entities
+
         # Phase 3：報表結構分析
         _s = st.empty()
         _s.caption("⏳ Phase 3：分析報表結構中…")
         case_sqls = [_get_case_sql_text(h.case_id, all_cases) for h in hits]
-        plan = plan_report(req_text, case_sqls)
+        plan = plan_report(req_text, case_sqls, entities_text=entities_text)
         _s.empty()
 
     st.session_state._plan = {
@@ -239,9 +244,10 @@ def _start_new_query(prompt: str, guardrail_tokens: dict | None = None) -> None:
         "classify_tokens":  classify_tokens,
         "guardrail_tokens": guardrail_tokens or {},
         "case_sqls":        case_sqls,
+        "entities_text":    entities_text,
         "plan":             plan,
         "qa_history":       [],
-        "all_plan_tokens":  dict(plan.tokens),  # 累計所有 plan 呼叫的 tokens
+        "all_plan_tokens":  dict(plan.tokens),
     }
     st.rerun()
 
@@ -675,6 +681,7 @@ def main():
                                 pending["req"],
                                 pending["case_sqls"],
                                 qa_history=qa_history,
+                                entities_text=pending.get("entities_text", ""),
                             )
                             _s.empty()
                             pending["plan"] = new_plan
@@ -706,6 +713,7 @@ def main():
                     pending["req"],
                     pending["case_sqls"],
                     qa_history=qa_history,
+                    entities_text=pending.get("entities_text", ""),
                 )
                 _s.empty()
                 pending["plan"] = new_plan
