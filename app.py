@@ -229,115 +229,76 @@ def _start_new_query(prompt: str, guardrail_tokens: dict | None = None) -> None:
         _s.empty()
 
     st.session_state._plan = {
-        "prompt":          prompt,
-        "req":             req_text,
-        "hits":            hits,
-        "all_cases":       all_cases,
-        "scene":           primary_scene,
-        "phase1_log":      phase1_log,
-        "phase2_log":      phase2_log,
-        "classify_tokens": classify_tokens,
+        "prompt":           prompt,
+        "req":              req_text,
+        "hits":             hits,
+        "all_cases":        all_cases,
+        "scene":            primary_scene,
+        "phase1_log":       phase1_log,
+        "phase2_log":       phase2_log,
+        "classify_tokens":  classify_tokens,
         "guardrail_tokens": guardrail_tokens or {},
-        "case_sqls":       case_sqls,
-        "plan":            plan,
-        "corrections":     [],
+        "case_sqls":        case_sqls,
+        "plan":             plan,
+        "qa_history":       [],
+        "all_plan_tokens":  dict(plan.tokens),  # 累計所有 plan 呼叫的 tokens
     }
     st.rerun()
 
 
-def _render_plan_ui(pending: dict) -> None:
-    """顯示報表結構建議，讓使用者確認或修正，確認後執行 SQL 生成。"""
-    from agent.report_planner import fmt_plan_for_prompt, fmt_plan_for_user, plan_report
+def _confirm_and_generate(pending: dict) -> None:
+    """使用者確認後執行 SQL 生成，寫入 Supabase，存入對話歷史，rerun。"""
+    from agent.report_planner import fmt_plan_for_prompt, fmt_plan_for_user
     from agent.config import CLASSIFICATION_MODEL, GENERATION_MODEL, get_model_pricing
     from agent.generator import generate
 
-    plan = pending["plan"]
+    plan             = pending["plan"]
+    report_plan_text = fmt_plan_for_prompt(plan)
+    report_plan_log  = fmt_plan_for_user(plan)
 
-    with st.container(border=True):
-        with st.expander("Phase 1：場景分類", expanded=False):
-            st.markdown(pending["phase1_log"])
-        with st.expander("Phase 2：向量檢索", expanded=False):
-            st.markdown(pending["phase2_log"])
+    with st.expander("Phase 3：報表呈現確認", expanded=True):
+        st.markdown(report_plan_log)
 
-        st.markdown("---")
-        st.markdown("**根據你的需求與相似案例，系統推測報表應呈現如下，請確認是否正確：**")
-        st.markdown(fmt_plan_for_user(plan))
-        st.markdown("---")
+    _s = st.empty()
+    _s.caption("⏳ Step A + B：SQL 生成中…（需要一些時間）")
+    gen = generate(
+        pending["req"],
+        pending["hits"],
+        pending["all_cases"],
+        model=GENERATION_MODEL,
+        scene=pending["scene"],
+        report_plan_text=report_plan_text,
+    )
 
-        with st.form("plan_confirm_form", clear_on_submit=True):
-            correction = st.text_input(
-                "如有需要調整，請說明（直接送出表示沒問題）",
-                placeholder="例如：希望每一列是分公司層級，而不是帳戶",
-            )
-            submitted = st.form_submit_button("確認，開始生成 SQL", type="primary")
+    step_a_log = (
+        f"**候選表格（{len(gen.candidate_tables)} 張）：**  \n"
+        f"{', '.join(gen.candidate_tables)}\n\n"
+        + (f"**Step A 思路：**\n\n{gen.step_a_reasoning}" if gen.step_a_reasoning else "")
+    )
+    step_b_log = (
+        f"**完整表格範圍（{len(gen.all_tables)} 張）：**  \n"
+        f"{', '.join(gen.all_tables)}\n\n"
+        + (f"**Step B 分析：**\n\n{gen.final_analysis}" if gen.final_analysis else "")
+    )
+    _s.empty()
+    with st.expander("Prompt 注入內容", expanded=False):
+        st.markdown(_fmt_injected(gen.injected_summary))
+    with st.expander("Step A：草稿生成", expanded=False):
+        st.markdown(step_a_log)
+    with st.expander("Step B：自我批判", expanded=False):
+        st.markdown(step_b_log)
 
-        if not submitted:
-            return
-
-        if correction.strip():
-            # 使用者要求修正，重新分析
-            _s = st.empty()
-            _s.caption("⏳ 重新分析報表結構…")
-            new_corrections = pending.get("corrections", []) + [correction]
-            new_plan = plan_report(
-                pending["req"],
-                pending["case_sqls"],
-                correction="\n".join(new_corrections),
-            )
-            _s.empty()
-            pending["plan"] = new_plan
-            pending["corrections"] = new_corrections
-            st.session_state._plan = pending
-            st.rerun()
-            return
-
-        # ── 使用者確認，執行 SQL 生成 ─────────────────────────────
-        report_plan_text = fmt_plan_for_prompt(plan)
-        report_plan_log  = fmt_plan_for_user(plan)
-
-        with st.expander("Phase 3：報表呈現確認", expanded=True):
-            st.markdown(report_plan_log)
-
-        _s = st.empty()
-        _s.caption("⏳ Step A + B：SQL 生成中…（需要一些時間）")
-        gen = generate(
-            pending["req"],
-            pending["hits"],
-            pending["all_cases"],
-            model=GENERATION_MODEL,
-            scene=pending["scene"],
-            report_plan_text=report_plan_text,
-        )
-
-        step_a_log = (
-            f"**候選表格（{len(gen.candidate_tables)} 張）：**  \n"
-            f"{', '.join(gen.candidate_tables)}\n\n"
-            + (f"**Step A 思路：**\n\n{gen.step_a_reasoning}" if gen.step_a_reasoning else "")
-        )
-        step_b_log = (
-            f"**完整表格範圍（{len(gen.all_tables)} 張）：**  \n"
-            f"{', '.join(gen.all_tables)}\n\n"
-            + (f"**Step B 分析：**\n\n{gen.final_analysis}" if gen.final_analysis else "")
-        )
-        _s.empty()
-        with st.expander("Prompt 注入內容", expanded=False):
-            st.markdown(_fmt_injected(gen.injected_summary))
-        with st.expander("Step A：草稿生成", expanded=False):
-            st.markdown(step_a_log)
-        with st.expander("Step B：自我批判", expanded=False):
-            st.markdown(step_b_log)
-
-        st.markdown('<div class="sa-sql-label">最終 SQL</div>', unsafe_allow_html=True)
-        st.code(_clean_sql(gen.final_sql), language="sql")
-        if gen.final_reasoning:
-            with st.expander("SQL 思路", expanded=False):
-                st.markdown(gen.final_reasoning)
+    st.markdown('<div class="sa-sql-label">最終 SQL</div>', unsafe_allow_html=True)
+    st.code(_clean_sql(gen.final_sql), language="sql")
+    if gen.final_reasoning:
+        with st.expander("SQL 思路", expanded=False):
+            st.markdown(gen.final_reasoning)
 
     # ── 費用計算 ──────────────────────────────────────────────────
     clf_price_in, clf_price_out = get_model_pricing(CLASSIFICATION_MODEL)
     classify_tokens  = pending["classify_tokens"]
     guardrail_tokens = pending["guardrail_tokens"]
-    plan_tokens      = plan.tokens
+    all_plan_tokens  = pending.get("all_plan_tokens", {})
 
     classify_cost = (
         classify_tokens.get("classify_in", 0) / 1_000_000 * clf_price_in
@@ -348,19 +309,12 @@ def _render_plan_ui(pending: dict) -> None:
         + guardrail_tokens.get("guardrail_out", 0) / 1_000_000 * clf_price_out
     )
     plan_cost = (
-        plan_tokens.get("plan_in", 0) / 1_000_000 * clf_price_in
-        + plan_tokens.get("plan_out", 0) / 1_000_000 * clf_price_out
+        all_plan_tokens.get("plan_in", 0) / 1_000_000 * clf_price_in
+        + all_plan_tokens.get("plan_out", 0) / 1_000_000 * clf_price_out
     )
     total_cost = guardrail_cost + classify_cost + plan_cost + gen.cost_usd
 
-    # ── 寫 Supabase experiment log ────────────────────────────────
     from agent.supabase_logger import insert
-    all_tokens = {
-        **guardrail_tokens,
-        **classify_tokens,
-        **plan_tokens,
-        **gen.tokens,
-    }
     ok, err = insert("experiments", {
         "name": "generate",
         "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
@@ -370,7 +324,7 @@ def _render_plan_ui(pending: dict) -> None:
             "candidate_tables": gen.candidate_tables,
             "all_tables": gen.all_tables,
             "final_sql": gen.final_sql,
-            "tokens": all_tokens,
+            "tokens": {**guardrail_tokens, **classify_tokens, **all_plan_tokens, **gen.tokens},
             "cost_usd": total_cost,
         },
         "log": "",
@@ -656,9 +610,14 @@ def main():
 
     st.markdown('<hr class="sa-div">', unsafe_allow_html=True)
 
-    # ── 報表結構確認中（等待使用者確認）────────────────────────────
+    # ── 報表結構確認中（ask / confirm 雙向對話）────────────────────
     if st.session_state._plan is not None:
+        from agent.report_planner import fmt_plan_for_user, plan_report
+
         pending = st.session_state._plan
+        plan    = pending["plan"]
+
+        # 使用者原始需求氣泡
         st.markdown(
             f'<div class="sa-user">'
             f'<div class="sa-user-avatar">你</div>'
@@ -666,12 +625,99 @@ def main():
             f'</div>',
             unsafe_allow_html=True,
         )
-        try:
-            _render_plan_ui(pending)
-        except Exception as e:
-            import traceback
-            st.error(f"錯誤：{e}\n\n```\n{traceback.format_exc()}\n```")
-        return  # 不顯示對話歷史或 chat input
+
+        with st.container(border=True):
+            with st.expander("Phase 1：場景分類", expanded=False):
+                st.markdown(pending["phase1_log"])
+            with st.expander("Phase 2：向量檢索", expanded=False):
+                st.markdown(pending["phase2_log"])
+
+            # 顯示已完成的問答記錄
+            for qa in pending.get("qa_history", []):
+                st.info(f"系統問：{qa['q']}")
+                st.markdown(
+                    f'<div class="sa-user" style="margin:4px 0 12px 0;">'
+                    f'<div class="sa-user-avatar">你</div>'
+                    f'<div class="sa-user-text">{qa["a"]}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+            try:
+                if plan.status == "ask":
+                    # LLM 還有問題要問
+                    st.info(f"**{plan.question}**")
+
+                else:
+                    # LLM 認為資訊充足，呈現理解讓使用者確認
+                    st.markdown(
+                        "**根據你的需求與相似案例，系統理解這份報表應呈現如下，請確認是否正確：**"
+                    )
+                    st.markdown(fmt_plan_for_user(plan))
+                    st.markdown("---")
+
+                    with st.form("plan_confirm_form", clear_on_submit=True):
+                        correction = st.text_input(
+                            "如有需要調整，請說明（直接送出表示沒問題）",
+                            placeholder="例如：希望每一列是分公司層級，而不是帳戶",
+                        )
+                        submitted = st.form_submit_button("確認，開始生成 SQL", type="primary")
+
+                    if submitted:
+                        if correction.strip():
+                            # 使用者指出需修正 → 加入記錄重新分析
+                            _s = st.empty()
+                            _s.caption("⏳ 重新分析報表結構…")
+                            qa_history = pending.get("qa_history", []) + [
+                                {"q": "請確認報表呈現方式", "a": correction}
+                            ]
+                            new_plan = plan_report(
+                                pending["req"],
+                                pending["case_sqls"],
+                                qa_history=qa_history,
+                            )
+                            _s.empty()
+                            pending["plan"] = new_plan
+                            pending["qa_history"] = qa_history
+                            _acc = pending.get("all_plan_tokens", {})
+                            for k, v in new_plan.tokens.items():
+                                _acc[k] = _acc.get(k, 0) + v
+                            pending["all_plan_tokens"] = _acc
+                            st.session_state._plan = pending
+                            st.rerun()
+                        else:
+                            # 確認無誤 → 生成 SQL
+                            _confirm_and_generate(pending)
+
+            except Exception as e:
+                import traceback
+                st.error(f"錯誤：{e}\n\n```\n{traceback.format_exc()}\n```")
+
+        # ask 狀態：用 chat_input 接收回答
+        if plan.status == "ask":
+            answer = st.chat_input("請回答上方的問題…")
+            if answer:
+                _s = st.empty()
+                _s.caption("⏳ 重新分析報表結構…")
+                qa_history = pending.get("qa_history", []) + [
+                    {"q": plan.question, "a": answer}
+                ]
+                new_plan = plan_report(
+                    pending["req"],
+                    pending["case_sqls"],
+                    qa_history=qa_history,
+                )
+                _s.empty()
+                pending["plan"] = new_plan
+                pending["qa_history"] = qa_history
+                _acc = pending.get("all_plan_tokens", {})
+                for k, v in new_plan.tokens.items():
+                    _acc[k] = _acc.get(k, 0) + v
+                pending["all_plan_tokens"] = _acc
+                st.session_state._plan = pending
+                st.rerun()
+
+        return  # 不顯示對話歷史或正常 chat input
 
     # ── Conversation ──────────────────────────────────────────────
     for i, turn in enumerate(st.session_state.conversation):

@@ -1,4 +1,4 @@
-"""報表結構規劃：在生成 SQL 前，先與使用者確認報表呈現方式。"""
+"""報表結構規劃：在生成 SQL 前，透過多輪對話確認報表呈現方式。"""
 
 from __future__ import annotations
 
@@ -11,48 +11,63 @@ from .generator import _chat
 
 @dataclass
 class ReportPlan:
+    status: str = "confirm"         # "ask" | "confirm"
+    question: str = ""              # status="ask" 時，向使用者提的問題
     granularity: str = "其他"       # 帳戶/客戶/營業員/分公司/其他
     granularity_detail: str = ""    # 每列代表什麼（白話）
-    pivot: bool = False             # 是否需要把期間轉成欄位
-    pivot_detail: str = ""          # PIVOT 哪個維度
-    subtotal: bool = False          # 是否需要小計/合計列
-    subtotal_detail: str = ""       # 哪個維度加小計
+    pivot: bool = False
+    pivot_detail: str = ""
+    subtotal: bool = False
+    subtotal_detail: str = ""
     tokens: dict = field(default_factory=dict)
 
 
 _SYSTEM = """\
-你是一位熟悉台灣金融業報表的顧問。
-根據使用者的需求與歷史案例 SQL，判斷這份報表應該長什麼樣子。
+你是一位熟悉台灣金融業報表的顧問，擅長解讀業務員需求。
+根據使用者的需求、歷史案例 SQL 與雙方的對話記錄，判斷這份報表應該長什麼樣子。
 只輸出 JSON，不要其他文字。"""
 
 
 def plan_report(
     requirement: str,
     case_sqls: list[str],
-    correction: str = "",
+    qa_history: list[dict] | None = None,
     model: str = CLASSIFICATION_MODEL,
 ) -> ReportPlan:
+    """
+    qa_history：[{"q": "...", "a": "..."}, ...]，代表已確認的問答記錄。
+    """
     sqls_text = "\n\n---\n\n".join(case_sqls[:5]) if case_sqls else "（無歷史案例）"
-    correction_block = (
-        f"\n\n【使用者的修正意見，請依此調整你的判斷】\n{correction}"
-        if correction.strip() else ""
-    )
+
+    qa_block = ""
+    if qa_history:
+        lines = []
+        for item in qa_history:
+            lines.append(f"系統問：{item['q']}\n使用者答：{item['a']}")
+        qa_block = "\n\n【雙方對話記錄（已確認的資訊，請以此為依據）】\n" + "\n\n".join(lines)
 
     prompt = f"""\
 【使用者需求】
 {requirement}
 
-【相似歷史案例 SQL（僅供參考，了解這類需求通常怎麼寫）】
-{sqls_text}{correction_block}
+【相似歷史案例 SQL（了解這類需求通常怎麼寫）】
+{sqls_text}{qa_block}
 
-請判斷這份報表的結構，輸出 JSON（不要其他文字）：
+請判斷這份報表的結構。判斷原則：
+- 結合需求與歷史案例，若能清楚判斷所有項目 → status="confirm"，直接輸出完整結構。
+- 若有真正無法判斷的關鍵資訊 → status="ask"，提一個最重要的問題（業務員聽得懂的話）。
+- 顯而易見的事情（例如排名報表就是要排名）不需要問。盡量 confirm，只有真的不確定才 ask。
+
+輸出 JSON（不要其他文字）：
 {{
+  "status": "ask 或 confirm",
+  "question": "若 status=ask：一個最關鍵的問題，用業務員聽得懂的話問；否則空字串",
   "granularity": "帳戶|客戶|營業員|分公司|其他",
   "granularity_detail": "每一列代表什麼，用業務員聽得懂的話說明，50字以內",
   "pivot": true 或 false,
-  "pivot_detail": "若需要把期間轉成欄位，說明轉哪個維度（例如：把月份轉成欄位，1月、2月...12月各一欄）；否則空字串",
+  "pivot_detail": "若需要把期間轉成欄位，說明轉哪個維度（例如：把月份轉成欄位，1月～12月各一欄）；否則空字串",
   "subtotal": true 或 false,
-  "subtotal_detail": "若需要小計合計列，說明在哪個維度加（例如：每個分公司底下加一行小計，最後一行加全部總計）；否則空字串"
+  "subtotal_detail": "若需要小計合計列，說明在哪個維度加；否則空字串"
 }}"""
 
     resp = _chat(
@@ -79,6 +94,8 @@ def plan_report(
         d = {}
 
     return ReportPlan(
+        status=d.get("status", "confirm"),
+        question=d.get("question", ""),
         granularity=d.get("granularity", "其他"),
         granularity_detail=d.get("granularity_detail", ""),
         pivot=bool(d.get("pivot", False)),
