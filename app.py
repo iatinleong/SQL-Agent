@@ -534,6 +534,22 @@ def _feedback_dialog():
 
 # ── Oracle SQL runner ─────────────────────────────────────────────
 
+def _init_oracle_client() -> None:
+    """初始化 Oracle thick mode client（每個 session 只執行一次）。"""
+    if st.session_state.get("_oracle_client_init"):
+        return
+    try:
+        import oracledb
+        lib_dir = (st.secrets.get("oracle") or {}).get("lib_dir")
+        if lib_dir:
+            oracledb.init_oracle_client(lib_dir=lib_dir)
+        else:
+            oracledb.init_oracle_client()
+    except Exception:
+        pass  # 已初始化或 thin mode，忽略
+    st.session_state._oracle_client_init = True
+
+
 def _sql_runner_widget(sql: str, widget_key: str) -> None:
     """執行 SQL 按鈕 + 結果顯示（結果快取在 session_state._sql_results）。"""
     import pandas as pd
@@ -550,24 +566,29 @@ def _sql_runner_widget(sql: str, widget_key: str) -> None:
             with st.spinner("連線 Oracle 執行中…"):
                 try:
                     import oracledb
-                    conn = oracledb.connect(
-                        user=st.secrets["oracle"]["user"],
-                        password=st.secrets["oracle"]["password"],
-                        dsn=st.secrets["oracle"]["dsn"],
-                    )
-                    with conn.cursor() as cur:
-                        cur.execute(sql)
-                        if cur.description:
-                            cols = [d[0] for d in cur.description]
-                            rows = cur.fetchmany(500)
-                            df = pd.DataFrame(rows, columns=cols)
-                            st.session_state._sql_results[widget_key] = {
-                                "ok": True, "df": df, "fetched": len(rows),
-                            }
-                        else:
-                            st.session_state._sql_results[widget_key] = {
-                                "ok": True, "df": None,
-                            }
+                    import time
+                    _init_oracle_client()
+                    ora = st.secrets["oracle"]
+                    dsn  = f"{ora['host']}:{ora['port']}/{ora['service_name']}"
+                    conn = oracledb.connect(user=ora["user"], password=ora["password"], dsn=dsn)
+                    cursor = conn.cursor()
+                    cursor.arraysize = 10000
+                    t0 = time.time()
+                    cursor.execute(sql)
+                    if cursor.description:
+                        cols = [d[0].lower() for d in cursor.description]
+                        rows = cursor.fetchmany(500)
+                        elapsed = time.time() - t0
+                        df = pd.DataFrame(rows, columns=cols)
+                        st.session_state._sql_results[widget_key] = {
+                            "ok": True, "df": df,
+                            "fetched": len(rows), "elapsed": elapsed,
+                        }
+                    else:
+                        st.session_state._sql_results[widget_key] = {
+                            "ok": True, "df": None,
+                        }
+                    cursor.close()
                     conn.close()
                 except Exception as e:
                     st.session_state._sql_results[widget_key] = {
@@ -580,9 +601,12 @@ def _sql_runner_widget(sql: str, widget_key: str) -> None:
         return
     if r["ok"]:
         if r["df"] is not None:
-            fetched = r["fetched"]
-            note = f"共 {fetched} 筆" + ("（已達 500 筆上限，可能有更多）" if fetched == 500 else "")
-            st.caption(f"查詢結果　{note}")
+            fetched  = r["fetched"]
+            elapsed  = r.get("elapsed", 0)
+            cap = f"查詢結果　{fetched} 筆　{elapsed:.1f}s"
+            if fetched == 500:
+                cap += "　（已達 500 筆上限，可能有更多）"
+            st.caption(cap)
             st.dataframe(r["df"], use_container_width=True)
         else:
             st.success("執行成功（無回傳資料）")
