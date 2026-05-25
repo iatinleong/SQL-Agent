@@ -132,10 +132,9 @@ def validate_and_fix(
         if passed:
             break
 
-        if i < max_iter - 1:
-            sql, tokens = _fix_with_llm(sql, errors, model)
-            for k, v in tokens.items():
-                total_tokens[k] = total_tokens.get(k, 0) + v
-        # 最後一輪不再修正，保留最後修正結果（或原始）
+        # 有錯就 fix；max_iter=1 時：驗證一次→fix一次→結束（不再驗證）
+        sql, tokens = _fix_with_llm(sql, errors, model)
+        for k, v in tokens.items():
+            total_tokens[k] = total_tokens.get(k, 0) + v
 
     return sql, log, total_tokens
