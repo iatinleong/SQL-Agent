@@ -21,3 +21,6 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Markdown（本地文件，不推送）
+*.md
