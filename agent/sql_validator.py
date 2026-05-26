@@ -60,12 +60,57 @@ def _run_sqlfluff(sql: str) -> list[str]:
         return [f"[sqlfluff] {e}"]
 
 
+def _check_oracle_quirks(sql: str) -> list[str]:
+    """偵測 sqlglot/sqlfluff 不會抓的 Oracle 特有語法限制。
+    目前規則：SELECT 沒有 FROM 來源時，Oracle 必須用 FROM DUAL。
+    其他資料庫允許裸 SELECT expr，sqlglot 不會報錯，但 Oracle 執行會拋 ORA-00923。
+    """
+    try:
+        import sqlglot
+        from sqlglot import exp
+        tree = sqlglot.parse_one(sql, dialect="oracle")
+    except Exception:
+        return []
+
+    errors: list[str] = []
+    seen: set = set()
+
+    for select_node in tree.find_all(exp.Select):
+        if select_node.args.get("from"):
+            continue  # 有 FROM，正常
+
+        # 嘗試往上找 CTE 名稱，讓錯誤訊息更明確
+        cte_name = ""
+        node = select_node.parent
+        while node:
+            if isinstance(node, exp.CTE):
+                cte_name = node.alias_or_name
+                break
+            node = getattr(node, "parent", None)
+
+        key = cte_name or id(select_node)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        loc = f" (CTE: {cte_name})" if cte_name else ""
+        errors.append(
+            f"[Oracle quirk] SELECT 沒有 FROM{loc}："
+            "Oracle 不允許無來源表格的 SELECT，請改為 SELECT ... FROM DUAL"
+        )
+
+    return errors
+
+
 def validate_sql(sql: str) -> list[str]:
-    """sqlglot 先跑；有 parse 錯誤就不跑 sqlfluff。"""
+    """sqlglot parse → Oracle quirk → sqlfluff，有錯提早返回。"""
     sql = _clean(sql)
     glot_errors = _run_sqlglot(sql)
     if glot_errors:
         return glot_errors
+    quirk_errors = _check_oracle_quirks(sql)
+    if quirk_errors:
+        return quirk_errors
     return _run_sqlfluff(sql)
 
 
