@@ -556,10 +556,21 @@ def generate(
 
     print(f"\n--- Step C-2：語意審查（幻覺 / Oracle 語法 / 效能）---")
     full_requirement = f"{requirement}\n\n{report_plan_text}" if report_plan_text else requirement
+    _c2_case_map = {str(c.get("資料夾")): c for c in all_cases}
+    _c2_case_blocks: list[str] = []
+    for hit in hits:
+        _c2_case = _c2_case_map.get(hit.case_id, {})
+        _c2_req = (_c2_case.get("需求") or {}).get("需求摘要", "")[:60]
+        _c2_sql = _get_case_sql_text(hit.case_id, all_cases, cap=1500)
+        _c2_case_blocks.append(
+            f"=== [{hit.case_id}] {_c2_req} ===\n{_c2_sql}"
+        )
+    cases_text = "\n\n".join(_c2_case_blocks)
     final_sql, review_note, review_changed, semantic_tokens = semantic_review(
         final_sql,
         schema_text=step_b_schema,
         requirement=full_requirement,
+        cases_text=cases_text,
         model=CLASSIFICATION_MODEL,
     )
     step_c_log.append({

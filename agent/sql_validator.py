@@ -112,23 +112,32 @@ def semantic_review(
     schema_text: str,
     requirement: str,
     model: str,
+    cases_text: str = "",
 ) -> tuple[str, str, bool, dict]:
     """
-    語意層審查：幻覺（表/欄位存在性）、Oracle 語法、效能。
+    語意層審查：幻覺（表/欄位存在性）、Oracle 語法、效能優化。
     回傳 (final_sql, note, changed, tokens)。
     若 SQL 已無問題，LLM 回覆 PASS，changed=False，SQL 不變。
     """
     from .generator import _chat
 
+    cases_block = (
+        "\n\n【參考案例 SQL（top-5 相似案例，供不在 Schema 中的表格/欄位用法參考）】\n"
+        + cases_text
+    ) if cases_text else ""
+
     prompt = (
         "【需求說明】\n"
         f"{requirement}\n\n"
         "【Schema（可用表格與欄位）】\n"
-        f"{schema_text}\n\n"
+        f"{schema_text}"
+        f"{cases_block}\n\n"
         "【待審查 SQL】\n"
         f"{sql}\n\n"
         "請從以下三個面向審查這份 SQL：\n"
         "1. 幻覺檢查：SQL 中所有表格名稱、欄位名稱是否確實存在於上方 Schema？\n"
+        "   若某表格不在 Schema 中，請參考上方參考案例中的用法判斷是否合理；\n"
+        "   若案例中也沒有出現，才視為幻覺問題。\n"
         "2. Oracle 語法：是否有非 Oracle 語法（LIMIT、ILIKE、:: 型別轉換等）？\n"
         "3. 效能優化：在不改變報表目的與輸出結果的前提下，是否有可優化（運算資源、運算速度）的寫法？\n"
         "   例如：WHERE 條件對索引欄位套函數可改成範圍條件、多次掃描同表應改用 CTE、\n"
