@@ -13,7 +13,7 @@
   "PI簽署":     {"tables": ["M_AC_ACCOUNT"],                "desc": "PI資格"},
   "貢獻度":     {"tables": ["M_AC_ACCOUNT_REVENUE"],        "desc": "業績貢獻度"},
   "營收":       {"tables": ["M_AC_ACCOUNT_REVENUE"],        "desc": "業績貢獻度"},
-  "年齡":       {"tables": ["M_PT_CUSTOMER"],               "desc": "客戶年齡KYC"},
+  "年齡":       {"tables": ["M_PT_CUSTOMER", "M_AC_ACCOUNT_INFO"], "desc": "客戶年齡KYC"},
   "KYC":        {"tables": ["M_PT_CUSTOMER"],               "desc": "客戶年齡KYC"},
   "離職":       {"tables": ["M_PT_SALES", "M_AC_ACCOUNT"],   "desc": "營業員異動／客戶移轉名單"},
   "優退":       {"tables": ["M_PT_SALES", "M_AC_ACCOUNT"],   "desc": "營業員異動／客戶移轉名單"},
@@ -28,5 +28,12 @@
   "財管成交":   {"tables": ["M_AT_ACCOUNT_TXN"],            "desc": "帳戶交易彙總"},
   "交易日曆":   {"tables": ["M_RF_DATE"],                   "desc": "工作日日曆"},
   "工作日":     {"tables": ["M_RF_DATE"],                   "desc": "工作日日曆"},
-  "已實現損益": {"tables": ["M_AC_ACCOUNT_ACTU_BENEFIT"],   "desc": "已實現損益"}
+  "已實現損益": {"tables": ["M_AC_ACCOUNT_ACTU_BENEFIT"],   "desc": "已實現損益"},
+  "地址":       {"tables": ["M_AC_ACCOUNT_INFO"],           "desc": "客戶通訊地址／戶籍地址"},
+  "通訊地址":   {"tables": ["M_AC_ACCOUNT_INFO"],           "desc": "客戶通訊地址"},
+  "戶籍地址":   {"tables": ["M_AC_ACCOUNT_INFO"],           "desc": "客戶戶籍地址"},
+  "居住地":     {"tables": ["M_AC_ACCOUNT_INFO"],           "desc": "客戶居住地址"},
+  "聯絡資料":   {"tables": ["M_AC_ACCOUNT_INFO"],           "desc": "客戶聯絡資訊（電話、地址、Email）"},
+  "性別":       {"tables": ["M_AC_ACCOUNT_INFO"],           "desc": "客戶性別"},
+  "生日":       {"tables": ["M_AC_ACCOUNT_INFO"],           "desc": "客戶出生日期"}
 }
