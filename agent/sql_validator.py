@@ -265,6 +265,28 @@ def check_hallucination(sql: str) -> list[str]:
                     f"[幻覺] 欄位不存在於 schema：{actual_table}.{col_name}"
                 )
 
+    # 5. 驗證無限定詞的欄位（對查詢中所有已知表格的欄位聯集比對）
+    # 若欄位不存在於任何一張 FROM 表格，才報幻覺（保守策略，避免誤報）
+    all_query_cols: set[str] = set()
+    for tname in set(alias_map.values()):
+        if tname in schema_lookup:
+            all_query_cols.update(schema_lookup[tname])
+
+    if all_query_cols:  # 若無法解析任何表格則跳過，避免誤報
+        seen_unqualified_errors: set[str] = set()
+        for cnode in tree.find_all(exp.Column):
+            col_name = (cnode.name or "").upper()
+            qualifier = (cnode.table or "").upper()
+            if not col_name or col_name == "*" or qualifier:
+                continue  # 有限定詞的欄位已由步驟 4 處理
+            if col_name in cte_names:
+                continue
+            if col_name not in all_query_cols and col_name not in seen_unqualified_errors:
+                seen_unqualified_errors.add(col_name)
+                errors.append(
+                    f"[幻覺] 欄位不存在於查詢中任何表格：{col_name}"
+                )
+
     return errors
 
 
