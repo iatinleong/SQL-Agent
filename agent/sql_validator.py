@@ -11,6 +11,7 @@ from .config import CLASSIFICATION_MODEL
 
 _SCHEMA_PATH = Path(__file__).parent.parent / "schema.csv"
 _DM_S_VIEW = "DM_S_VIEW."
+_ORACLE_SYSTEM_TABLES = {"DUAL"}
 
 
 # ── 前處理：清理 LLM 輸出的雜訊 ───────────────────────────────────
@@ -126,7 +127,7 @@ def _fix_with_llm(sql: str, errors: list[str], model: str) -> tuple[str, dict]:
             {
                 "role": "system",
                 "content": (
-                    "你是 Oracle SQL 專家。"
+                    "你是 Oracle SQL 專家。【Oracle 語法與效能】語法正確性（嚴格遵守）：使用 Oracle 19c+ 語法，禁用其他資料庫方言（MySQL 的 LIMIT、PostgreSQL 的 ILIKE 等）。"
                     "根據錯誤訊息修正 SQL，只輸出修正後的完整 SQL，"
                     "不要任何說明、不要 markdown fence。"
                 ),
@@ -234,6 +235,8 @@ def check_hallucination(sql: str) -> list[str]:
             continue
         normalized = _normalize_table(tnode.db or "", raw_name)
         if normalized in cte_names or raw_name.upper() in cte_names:
+            continue
+        if raw_name.upper() in _ORACLE_SYSTEM_TABLES:
             continue
         if normalized not in schema_lookup and normalized not in seen_table_errors:
             seen_table_errors.add(normalized)
