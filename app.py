@@ -263,26 +263,24 @@ def _confirm_and_generate(pending: dict) -> None:
     with st.expander("Step B：自我批判", expanded=False):
         st.markdown(step_b_log)
 
-    # Step C：語法驗證 + 語意審查結果
+    # Step C：語法驗證 + 決定性幻覺檢查結果
     step_c_log = gen.step_c_log
     if step_c_log:
-        syntax_ok = all(e.get("passed", True) for e in step_c_log if "round" in e)
-        semantic_entry = next((e for e in step_c_log if e.get("stage") == "semantic"), None)
-        semantic_ok = not (semantic_entry and semantic_entry.get("changed"))
-        all_ok = syntax_ok and semantic_ok
-        label = f"Step C：驗證　{'✅ 通過' if all_ok else '⚠️ 有改寫'}"
+        all_ok = all(e.get("passed", True) for e in step_c_log)
+        label = f"Step C：驗證　{'✅ 通過' if all_ok else '❌ 有問題'}"
         with st.expander(label, expanded=not all_ok):
             for entry in step_c_log:
-                if entry.get("stage") == "semantic":
-                    if entry["changed"]:
-                        st.warning("語意審查：發現問題，已改寫")
-                        st.markdown(entry["note"])
+                if entry.get("stage") == "hallucination":
+                    if entry["passed"]:
+                        st.success("C-2 幻覺檢查：通過")
                     else:
-                        st.success("語意審查：通過（PASS）")
+                        st.warning(f"C-2 幻覺檢查：發現 {len(entry['errors'])} 個問題，已送 LLM 修正")
+                        for err in entry["errors"]:
+                            st.code(err, language="text")
                 elif entry.get("passed"):
-                    st.success(f"Round {entry['round']}：語法驗證通過")
+                    st.success(f"C-1 Round {entry['round']}：語法驗證通過")
                 else:
-                    st.warning(f"Round {entry['round']}：發現 {len(entry['errors'])} 個問題")
+                    st.warning(f"C-1 Round {entry['round']}：發現 {len(entry['errors'])} 個問題")
                     for err in entry["errors"]:
                         st.code(err, language="text")
 
@@ -649,23 +647,21 @@ def _render_turn(turn: Turn, idx: int):
         for label, log in log_sections:
             if label == "Step C：語法驗證":
                 if log:
-                    syntax_ok = all(e.get("passed", True) for e in log if "round" in e)
-                    semantic_entry = next((e for e in log if e.get("stage") == "semantic"), None)
-                    semantic_ok = not (semantic_entry and semantic_entry.get("changed"))
-                    all_ok = syntax_ok and semantic_ok
-                    icon = "✅" if all_ok else "⚠️"
+                    all_ok = all(e.get("passed", True) for e in log)
+                    icon = "✅" if all_ok else "❌"
                     with st.expander(f"{label}　{icon}", expanded=False):
                         for entry in log:
-                            if entry.get("stage") == "semantic":
-                                if entry["changed"]:
-                                    st.warning("語意審查：發現問題，已改寫")
-                                    st.markdown(entry["note"])
+                            if entry.get("stage") == "hallucination":
+                                if entry["passed"]:
+                                    st.success("C-2 幻覺檢查：通過")
                                 else:
-                                    st.success("語意審查：通過（PASS）")
+                                    st.warning(f"C-2 幻覺檢查：發現 {len(entry['errors'])} 個問題，已送 LLM 修正")
+                                    for err in entry["errors"]:
+                                        st.code(err, language="text")
                             elif entry.get("passed"):
-                                st.success(f"Round {entry['round']}：通過")
+                                st.success(f"C-1 Round {entry['round']}：通過")
                             else:
-                                st.warning(f"Round {entry['round']}：{len(entry['errors'])} 個問題")
+                                st.warning(f"C-1 Round {entry['round']}：{len(entry['errors'])} 個問題")
                                 for err in entry["errors"]:
                                     st.code(err, language="text")
             elif log.strip():

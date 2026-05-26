@@ -537,8 +537,8 @@ def generate(
     )
     print(f"  tokens：in={b_in}  out={b_out}")
 
-    # ── Step C：語法驗證 + 語意審查 ──────────────────────────────
-    from .sql_validator import validate_and_fix, semantic_review
+    # ── Step C：語法驗證 + 決定性幻覺檢查 ───────────────────────────
+    from .sql_validator import validate_and_fix, check_and_fix_hallucination
     from .config import CLASSIFICATION_MODEL
 
     print(f"\n{SEP}")
@@ -554,36 +554,23 @@ def generate(
             for e in entry["errors"]:
                 print(f"    {e}")
 
-    print(f"\n--- Step C-2：語意審查（幻覺 / Oracle 語法 / 效能）---")
-    full_requirement = f"{requirement}\n\n{report_plan_text}" if report_plan_text else requirement
-    _c2_case_map = {str(c.get("資料夾")): c for c in all_cases}
-    _c2_case_blocks: list[str] = []
-    for hit in hits:
-        _c2_case = _c2_case_map.get(hit.case_id, {})
-        _c2_req = (_c2_case.get("需求") or {}).get("需求摘要", "")[:60]
-        _c2_sql = _get_case_sql_text(hit.case_id, all_cases, cap=1500)
-        _c2_case_blocks.append(
-            f"=== [{hit.case_id}] {_c2_req} ===\n{_c2_sql}"
-        )
-    cases_text = "\n\n".join(_c2_case_blocks)
-    final_sql, review_note, review_changed, semantic_tokens = semantic_review(
-        final_sql,
-        schema_text=step_b_schema,
-        requirement=full_requirement,
-        cases_text=cases_text,
-        model=CLASSIFICATION_MODEL,
+    print(f"\n--- Step C-2：幻覺檢查（AST + schema.csv 決定性比對）---")
+    final_sql, h_errors, h_passed, h_tokens = check_and_fix_hallucination(
+        final_sql, model=CLASSIFICATION_MODEL
     )
     step_c_log.append({
-        "stage": "semantic",
-        "changed": review_changed,
-        "note": review_note,
+        "stage": "hallucination",
+        "errors": h_errors,
+        "passed": h_passed,
     })
-    for k, v in semantic_tokens.items():
+    for k, v in h_tokens.items():
         fix_tokens[k] = fix_tokens.get(k, 0) + v
-    if review_changed:
-        print(f"  ⚠️ 發現問題，已改寫\n  {review_note[:200]}")
+    if h_passed:
+        print("  ✅ 幻覺檢查通過")
     else:
-        print("  ✅ 語意審查通過（PASS）")
+        print(f"  ❌ 發現 {len(h_errors)} 個幻覺問題，已送 LLM 修正")
+        for e in h_errors:
+            print(f"    {e}")
 
     print(f"\n{WIDE_SEP}")
     print("=== 最終 SQL ===")
