@@ -74,6 +74,49 @@ details summary:hover { color:#222; }
 
 /* Hide native dialog close (X) button — replaced by explicit buttons */
 [data-testid="stBaseButton-headerNoPadding"] { display: none !important; }
+
+/* ── Sidebar：ChatGPT 風格 ────────────────────────────────── */
+[data-testid="stSidebar"] { background:#171717 !important; border-right:none !important; }
+[data-testid="stSidebar"] section { padding:0.5rem 0.3rem !important; }
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] small,
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] * {
+    color:#ececec !important; font-size:0.8rem !important;
+}
+[data-testid="stSidebar"] hr { border-color:rgba(255,255,255,.1) !important; margin:.35rem 0 !important; }
+/* 所有按鈕：透明 + 左對齊 */
+[data-testid="stSidebar"] .stButton > button {
+    background:transparent !important; border:none !important;
+    border-radius:6px !important; text-align:left !important;
+    justify-content:flex-start !important; padding:6px 10px !important;
+    font-size:0.82rem !important; color:#ececec !important;
+    font-weight:400 !important; box-shadow:none !important;
+    transition:background .12s ease !important; width:100% !important;
+    white-space:nowrap !important; overflow:hidden !important;
+    text-overflow:ellipsis !important;
+}
+[data-testid="stSidebar"] .stButton > button:hover {
+    background:rgba(255,255,255,.09) !important; color:#fff !important;
+}
+[data-testid="stSidebar"] .stButton > button:focus:not(:active) { box-shadow:none !important; }
+/* 目前開啟的 session */
+[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"],
+[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+    background:rgba(255,255,255,.14) !important;
+    color:#fff !important; font-weight:500 !important;
+}
+[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"]:hover,
+[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
+    background:rgba(255,255,255,.2) !important;
+}
+/* 日期分組標籤 */
+.sa-sidebar-group {
+    font-size:0.7rem !important; font-weight:600 !important;
+    color:rgba(255,255,255,.4) !important; letter-spacing:.06em !important;
+    text-transform:uppercase !important; padding:8px 10px 3px 10px !important;
+    margin:0 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -144,9 +187,8 @@ def _load_and_restore_session(session_id: str) -> None:
 
 
 def _render_sidebar(user: dict) -> None:
-    """左側歷史對話欄。"""
+    """左側歷史對話欄（ChatGPT 風格，依日期分組）。"""
     if not st.session_state.get("_sidebar_visible", True):
-        # 隱藏 sidebar（CSS 注入）
         st.markdown("""
 <style>
 [data-testid="stSidebar"],
@@ -154,35 +196,77 @@ def _render_sidebar(user: dict) -> None:
 </style>""", unsafe_allow_html=True)
         return
 
+    from datetime import date as _date, timedelta as _td
+    from agent.session_store import load_sessions_list
+
+    _today     = _date.today()
+    _yesterday = _today - _td(days=1)
+    _seven_ago = _today - _td(days=7)
+
+    def _sess_date(sess: dict) -> _date:
+        ts = sess.get("updated_at", "")
+        try:
+            return datetime.fromisoformat(ts.replace("Z", "+00:00")).date()
+        except Exception:
+            return _date.min
+
+    def _group_label(d: _date) -> str:
+        if d >= _today:    return "今天"
+        if d == _yesterday: return "昨天"
+        if d >= _seven_ago: return "過去 7 天"
+        return "更早"
+
     with st.sidebar:
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            st.markdown("**歷史對話**")
-        with c2:
-            if st.button("收起", key="collapse_sidebar", use_container_width=True):
+        # Header row: title + new-chat icon + collapse icon
+        hc1, hc2, hc3 = st.columns([4, 1, 1])
+        with hc1:
+            st.markdown(
+                '<p style="color:#ececec;font-weight:600;font-size:0.9rem;'
+                'margin:6px 0 0 2px;padding:0">SQL Agent</p>',
+                unsafe_allow_html=True,
+            )
+        with hc2:
+            if st.button("✏️", key="sidebar_new_convo", use_container_width=True, help="新對話"):
+                if st.session_state.conversation and st.session_state.get("_feedback_pending"):
+                    _feedback_dialog(start_new_convo=True)
+                else:
+                    _reset_conversation()
+                    st.rerun()
+        with hc3:
+            if st.button("◂", key="collapse_sidebar", use_container_width=True, help="收起"):
                 st.session_state._sidebar_visible = False
                 st.rerun()
 
-        if st.button("＋ 新對話", use_container_width=True, type="primary",
-                     key="sidebar_new_convo"):
-            if st.session_state.conversation and st.session_state.get("_feedback_pending"):
-                _feedback_dialog(start_new_convo=True)
-            else:
-                _reset_conversation()
-                st.rerun()
+        st.markdown(
+            '<hr style="border-color:rgba(255,255,255,.1);margin:.5rem 0 .3rem 0">',
+            unsafe_allow_html=True,
+        )
 
-        st.markdown("---")
-
-        from agent.session_store import load_sessions_list
         sessions = load_sessions_list(user["employee_id"])
-
         if not sessions:
-            st.caption("尚無歷史對話")
-        else:
-            current_id = st.session_state.get("_current_session_id")
-            for sess in sessions:
+            st.markdown(
+                '<p style="color:rgba(255,255,255,.35);font-size:0.78rem;'
+                'padding:8px 10px">尚無歷史對話</p>',
+                unsafe_allow_html=True,
+            )
+            return
+
+        current_id = st.session_state.get("_current_session_id")
+
+        # 依日期分組，保留 updated_at 降序
+        _group_order = ["今天", "昨天", "過去 7 天", "更早"]
+        _groups: dict[str, list] = {g: [] for g in _group_order}
+        for sess in sessions:
+            _groups[_group_label(_sess_date(sess))].append(sess)
+
+        for group in _group_order:
+            group_sessions = _groups[group]
+            if not group_sessions:
+                continue
+            st.markdown(f'<p class="sa-sidebar-group">{group}</p>', unsafe_allow_html=True)
+            for sess in group_sessions:
                 title = sess.get("title", "（未命名）")
-                label = (title[:28] + "…") if len(title) > 28 else title
+                label = (title[:26] + "…") if len(title) > 26 else title
                 is_active = sess["id"] == current_id
                 if st.button(
                     label,
