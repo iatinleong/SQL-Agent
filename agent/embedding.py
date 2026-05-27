@@ -19,6 +19,8 @@ _init_lock = threading.Lock()
 _encode_lock = threading.Lock()
 _waiting = 0  # 等待取得 _encode_lock 的 thread 數（不含正在執行的）
 
+_local = threading.local()  # per-thread callback storage
+
 
 def _get_model():
     global _model
@@ -30,18 +32,33 @@ def _get_model():
     return _model
 
 
-def get_queue_info() -> tuple[bool, int]:
-    """回傳 (is_encoding, n_waiting)。
-    is_encoding：目前是否有 session 正在執行 encode。
-    n_waiting  ：正在排隊等待的 session 數（不含正在執行的）。
+def set_waiting_callback(callback) -> None:
+    """註冊當前 thread 的排隊通知 callback：callback(n_others_waiting)。
+    在 encode() 確認需要等待時，從同一個 thread 呼叫，讓 Streamlit UI 可以即時更新。
     """
-    return _encode_lock.locked(), max(0, _waiting)
+    _local.callback = callback
+
+
+def clear_waiting_callback() -> None:
+    _local.callback = None
 
 
 def encode(texts: list[str], **kwargs) -> np.ndarray:
     """Thread-safe encode，同一時間只允許一個 encode 任務執行。"""
     global _waiting
     _waiting += 1
+
+    # 在 acquire() 之前，若已有人佔用或有人排隊，透過 callback 通知 UI（仍在同一 thread）
+    cb = getattr(_local, 'callback', None)
+    if cb:
+        n_others = max(0, _waiting - 1)   # 其他正在排隊的 session 數
+        is_busy = _encode_lock.locked()    # 是否有 session 正在執行
+        if is_busy or n_others > 0:
+            try:
+                cb(n_others)
+            except Exception:
+                pass
+
     _acquired = False
     try:
         with _encode_lock:
