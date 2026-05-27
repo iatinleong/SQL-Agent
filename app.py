@@ -112,7 +112,7 @@ def _init():
         "_session_token": None,       # cookie 對應的 session token
         "_current_session_id": None,  # 目前對話在 Supabase 的 UUID
         "_session_title": "",         # 目前對話標題（第一句需求）
-        "_collapse_trigger": False,   # 觸發 sidebar 收起的 JS 旗標
+        "_sidebar_visible": True,     # 歷史對話欄是否顯示
     }.items():
         if k not in st.session_state:
             st.session_state[k] = v
@@ -145,13 +145,22 @@ def _load_and_restore_session(session_id: str) -> None:
 
 def _render_sidebar(user: dict) -> None:
     """左側歷史對話欄。"""
+    if not st.session_state.get("_sidebar_visible", True):
+        # 隱藏 sidebar（CSS 注入）
+        st.markdown("""
+<style>
+[data-testid="stSidebar"],
+[data-testid="stSidebarCollapsedControl"] { display: none !important; }
+</style>""", unsafe_allow_html=True)
+        return
+
     with st.sidebar:
         c1, c2 = st.columns([3, 1])
         with c1:
             st.markdown("**歷史對話**")
         with c2:
             if st.button("收起", key="collapse_sidebar", use_container_width=True):
-                st.session_state._collapse_trigger = True
+                st.session_state._sidebar_visible = False
                 st.rerun()
 
         if st.button("＋ 新對話", use_container_width=True, type="primary",
@@ -183,17 +192,6 @@ def _render_sidebar(user: dict) -> None:
                 ):
                     _load_and_restore_session(sess["id"])
                     st.rerun()
-
-    # 收起 sidebar 的 JS（由旗標觸發，避免每次 render 都執行）
-    if st.session_state.get("_collapse_trigger"):
-        st.session_state._collapse_trigger = False
-        import streamlit.components.v1 as _cv1
-        _cv1.html("""<script>
-setTimeout(function(){
-    var btn = window.parent.document.querySelector('[data-testid="stSidebarCollapseButton"]');
-    if (btn) btn.click();
-}, 150);
-</script>""", height=0)
 
 
 def _login_gate() -> bool:
@@ -949,6 +947,11 @@ def main():
 
     # ── Header ────────────────────────────────────────────────────
     h1, _, h2, h3 = st.columns([5, 2, 1, 1])
+    if not st.session_state.get("_sidebar_visible", True):
+        with h1:
+            if st.button("☰ 歷史對話", key="expand_sidebar"):
+                st.session_state._sidebar_visible = True
+                st.rerun()
     with h1:
         st.markdown('<p class="sa-title">SQL Agent</p>', unsafe_allow_html=True)
         name = user.get("display_name") or user.get("employee_id", "")
