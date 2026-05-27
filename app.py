@@ -108,6 +108,7 @@ def _init():
         "_sql_results": {},
         "_feedback_pending": False,   # SQL 生成後等待回饋
         "_auto_fb_triggered": False,  # 閒置 timer 已自動觸發過一次
+        "current_user": None,         # {"employee_id": ..., "display_name": ...}
     }.items():
         if k not in st.session_state:
             st.session_state[k] = v
@@ -121,6 +122,57 @@ def _reset_conversation():
     st.session_state._plan = None
     st.session_state._feedback_pending = False
     st.session_state._auto_fb_triggered = False
+
+
+def _login_gate() -> bool:
+    """顯示登入 / 註冊表單。已登入回傳 True，否則渲染表單後回傳 False。"""
+    if st.session_state.get("current_user"):
+        return True
+
+    st.markdown('<p class="sa-title">SQL Agent</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sa-sub">請先登入</p>', unsafe_allow_html=True)
+    st.markdown('<hr class="sa-div">', unsafe_allow_html=True)
+
+    tab_login, tab_register = st.tabs(["登入", "註冊"])
+
+    with tab_login:
+        with st.form("login_form"):
+            emp_id   = st.text_input("員工編號")
+            password = st.text_input("密碼", type="password")
+            submitted = st.form_submit_button("登入", type="primary", use_container_width=True)
+        if submitted:
+            if not emp_id or not password:
+                st.error("請填寫員工編號與密碼")
+            else:
+                from agent.auth import login_user
+                ok, result = login_user(emp_id.strip(), password)
+                if ok:
+                    st.session_state.current_user = result
+                    st.rerun()
+                else:
+                    st.error(result)
+
+    with tab_register:
+        with st.form("register_form"):
+            emp_id2      = st.text_input("員工編號")
+            display_name = st.text_input("姓名（選填）")
+            password2    = st.text_input("密碼", type="password")
+            password2c   = st.text_input("確認密碼", type="password")
+            submitted2 = st.form_submit_button("註冊", type="primary", use_container_width=True)
+        if submitted2:
+            if not emp_id2 or not password2:
+                st.error("員工編號與密碼為必填")
+            elif password2 != password2c:
+                st.error("兩次密碼不一致")
+            else:
+                from agent.auth import register_user
+                ok, msg = register_user(emp_id2.strip(), password2, display_name)
+                if ok:
+                    st.success(f"{msg}，請切換到「登入」頁面")
+                else:
+                    st.error(msg)
+
+    return False
 
 
 # ── Log helpers ───────────────────────────────────────────────────
@@ -523,8 +575,11 @@ def _save_feedback(rating: str, text: str):
         {"query": t.user_query, "sql": t.sql, "intent": t.intent}
         for t in st.session_state.conversation
     ]
+    user = st.session_state.get("current_user") or {}
     payload = {
         "timestamp": ts,
+        "employee_id": user.get("employee_id", ""),
+        "display_name": user.get("display_name", ""),
         "rating": rating,
         "feedback_text": text,
         "turns": turns_snapshot,
@@ -783,12 +838,21 @@ def _render_available_tables() -> None:
 def main():
     _init()
 
+    if not _login_gate():
+        return
+
+    user = st.session_state.current_user or {}
+
     # ── Header ────────────────────────────────────────────────────
-    h1, _, h2 = st.columns([5, 2, 1])
+    h1, _, h2, h3 = st.columns([5, 2, 1, 1])
     with h1:
         st.markdown('<p class="sa-title">SQL Agent</p>', unsafe_allow_html=True)
-        st.markdown('<p class="sa-sub">以自然語言描述報表需求，自動生成 Oracle SQL</p>',
-                    unsafe_allow_html=True)
+        name = user.get("display_name") or user.get("employee_id", "")
+        st.markdown(
+            f'<p class="sa-sub">以自然語言描述報表需求，自動生成 Oracle SQL'
+            f'{"　　👤 " + name if name else ""}</p>',
+            unsafe_allow_html=True,
+        )
     with h2:
         if st.session_state.conversation or st.session_state._plan:
             st.write("")
@@ -798,6 +862,12 @@ def main():
                 else:
                     _reset_conversation()
                     st.rerun()
+    with h3:
+        st.write("")
+        if st.button("登出", use_container_width=True):
+            st.session_state.current_user = None
+            _reset_conversation()
+            st.rerun()
 
     st.markdown('<hr class="sa-div">', unsafe_allow_html=True)
     _render_available_tables()
