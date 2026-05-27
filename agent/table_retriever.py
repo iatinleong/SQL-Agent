@@ -16,7 +16,8 @@ from typing import Optional
 
 import numpy as np
 
-from .config import BASE_DIR, BGE_MODEL_PATH
+from .config import BASE_DIR
+from .embedding import encode
 
 _SCHEMA_PATH = BASE_DIR / "schema.csv"
 _SUMMARIES_DIR = BASE_DIR / "table_summaries"
@@ -30,16 +31,7 @@ _EXTRA_TABLES = {
 
 TOP_K_CHUNKS = 3  # 每張表取 top-K chunk 做平均
 
-_model = None
 _chunk_index: Optional[tuple[list[tuple[str, str]], np.ndarray]] = None
-
-
-def _get_model():
-    global _model
-    if _model is None:
-        from sentence_transformers import SentenceTransformer
-        _model = SentenceTransformer(BGE_MODEL_PATH, device="cpu")
-    return _model
 
 
 def _load_target_tables() -> set[str]:
@@ -115,8 +107,7 @@ def _get_index() -> tuple[list[tuple[str, str]], np.ndarray]:
             return _chunk_index
 
     print(f"  [TableRetriever] 建立 index（{len(chunks)} chunks）...")
-    model = _get_model()
-    vecs = model.encode(
+    vecs = encode(
         [c[1] for c in chunks],
         normalize_embeddings=True,
         batch_size=32,
@@ -138,7 +129,7 @@ def retrieve_tables(
     with_scores=True 時回傳 [(table_name, score), ...]，否則只回傳 [table_name, ...]。
     """
     chunks, vecs = _get_index()
-    query_vec = _get_model().encode([query], normalize_embeddings=True)[0]
+    query_vec = encode([query], normalize_embeddings=True)[0]
     scores = vecs @ query_vec  # cosine（已正規化）
 
     table_chunk_scores: dict[str, list[float]] = defaultdict(list)

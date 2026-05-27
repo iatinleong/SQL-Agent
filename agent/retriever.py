@@ -8,21 +8,13 @@ from typing import Optional
 
 import numpy as np
 
-from .config import BASE_DIR, BGE_MODEL_PATH
+from .config import BASE_DIR
+from .embedding import encode
 from .summarizer import SUMMARIES_DIR, load_summaries
 
 _EMBEDDINGS_PATH: Path = BASE_DIR / "all_cases_embeddings.npz"
 
-_model = None
 _index: Optional[dict[str, np.ndarray]] = None  # case_id → normalized 1024-dim vec
-
-
-def _get_model():
-    global _model
-    if _model is None:
-        from sentence_transformers import SentenceTransformer
-        _model = SentenceTransformer(BGE_MODEL_PATH, device="cpu")
-    return _model
 
 
 def _get_index() -> dict[str, np.ndarray]:
@@ -46,9 +38,8 @@ def _get_index() -> dict[str, np.ndarray]:
             return _index
 
     print(f"  [Retriever] 建立 index（{len(summaries)} 筆）...")
-    model = _get_model()
     ids = list(summaries.keys())
-    vecs = model.encode(
+    vecs = encode(
         [summaries[cid] for cid in ids],
         normalize_embeddings=True,
         show_progress_bar=True,
@@ -69,7 +60,7 @@ class RetrievalHit:
 def retrieve(query: str, all_cases: list[dict], top_k: int = 5) -> list[RetrievalHit]:
     """用 query 對 case_summaries/ 做 cosine 搜尋，回傳 Top-K。"""
     index = _get_index()
-    query_vec: np.ndarray = _get_model().encode([query], normalize_embeddings=True)[0]
+    query_vec: np.ndarray = encode([query], normalize_embeddings=True)[0]
 
     scored = [
         (float(np.dot(query_vec, vec)), cid)
