@@ -128,11 +128,14 @@ def _get_index() -> tuple[list[tuple[str, str]], np.ndarray]:
     return _chunk_index
 
 
-def retrieve_tables(query: str, top_n: int = 5) -> list[str]:
+def retrieve_tables(
+    query: str,
+    top_n: int = 5,
+    with_scores: bool = False,
+) -> list[str] | list[tuple[str, float]]:
     """
-    回傳與 query 最相關的前 top_n 張表格名稱。
-    用已計算的 query embedding（若有）可從外部傳入以省略重算；
-    此處獨立計算以保持模組自洽。
+    回傳與 query 最相關的前 top_n 張表格。
+    with_scores=True 時回傳 [(table_name, score), ...]，否則只回傳 [table_name, ...]。
     """
     chunks, vecs = _get_index()
     query_vec = _get_model().encode([query], normalize_embeddings=True)[0]
@@ -147,5 +150,7 @@ def retrieve_tables(query: str, top_n: int = 5) -> list[str]:
         for tname, sc in table_chunk_scores.items()
     }
 
-    ranked = sorted(table_scores.items(), key=lambda x: x[1], reverse=True)
-    return [tname for tname, _ in ranked[:top_n]]
+    ranked = sorted(table_scores.items(), key=lambda x: x[1], reverse=True)[:top_n]
+    if with_scores:
+        return list(ranked)
+    return [tname for tname, _ in ranked]

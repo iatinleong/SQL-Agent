@@ -180,32 +180,32 @@ def _start_new_query(prompt: str, guardrail_tokens: dict | None = None) -> None:
     req_text = normalize_requirement(prompt)
 
     with st.container(border=True):
-        # Phase 1：向量檢索
+        # Phase 1：案例檢索 + 表格語意檢索
         _s = st.empty()
         _s.caption("⏳ Phase 1：向量檢索中…")
+
         hits = retrieve(req_text, all_cases, top_k=5)
         if not hits:
             _s.warning("找不到案例摘要，請先執行 `python -m agent --summarize`")
             return
-        phase1_log = "**Top-5 檢索結果**\n\n" + _fmt_phase1(hits, all_cases)
-        _s.empty()
-        with st.expander("Phase 1：向量檢索", expanded=False):
-            st.markdown(phase1_log)
 
         # 實體擷取
         from agent.entity_extractor import extract_entities
         extraction = extract_entities(req_text)
         entities_text = extraction.enriched_entities
 
-        # 表格語意檢索：找出與需求最相關的表格，補充業務說明給 report_planner
+        # 表格語意檢索（含分數，供 UI 顯示）
         from agent.table_retriever import retrieve_tables
         from agent.schema_summarizer import load_table_summaries
         from agent.generator import _get_union_tables, _load_schema_for_tables
         _summaries = load_table_summaries()
         available = set(_summaries.keys())
-        _semantic_tables = retrieve_tables(req_text, top_n=5)
+        _semantic_with_scores: list[tuple[str, float]] = retrieve_tables(req_text, top_n=5, with_scores=True)
+        _semantic_tables = [t for t, _ in _semantic_with_scores]
+
+        # 補充業務說明給 entities_text
         _table_desc_lines = []
-        for _t in _semantic_tables:
+        for _t, _ in _semantic_with_scores:
             _summary = _summaries.get(_t, "")
             if _summary:
                 _table_desc_lines.append(f"  • {_t}：{_summary[:80]}")
@@ -220,6 +220,24 @@ def _start_new_query(prompt: str, guardrail_tokens: dict | None = None) -> None:
             if _t in available:
                 _candidate_set_plan.add(_t)
         schema_for_plan = _load_schema_for_tables(sorted(_candidate_set_plan))
+
+        # Phase 1 log：案例 + 表格語意
+        _table_rows = "\n".join(
+            f"| `{t}` | {_summaries.get(t, '')[:55]} | {s:.4f} |"
+            for t, s in _semantic_with_scores
+        )
+        phase1_log = (
+            "**Top-5 案例檢索**\n\n"
+            + _fmt_phase1(hits, all_cases)
+            + "\n\n**表格語意檢索 Top-5**\n\n"
+            "| 表格 | 業務說明 | 相似度 |\n"
+            "|------|---------|--------|\n"
+            + _table_rows
+        )
+
+        _s.empty()
+        with st.expander("Phase 1：向量檢索", expanded=False):
+            st.markdown(phase1_log)
 
         # Phase 2：報表需求確認
         _s = st.empty()
