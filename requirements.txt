@@ -9,4 +9,3 @@ supabase
 sqlglot
 sqlfluff
 bcrypt
-streamlit-cookies-controller
