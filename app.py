@@ -539,8 +539,9 @@ def _confirm_and_generate(pending: dict) -> None:
         st.markdown(_fmt_injected(gen.injected_summary))
     with st.expander("Step A：草稿生成", expanded=False):
         st.markdown(step_a_log)
-    with st.expander("Step B：SQL 審查", expanded=False):
-        st.markdown(step_b_log)
+    if gen.final_analysis:
+        with st.expander("Step B：SQL 審查", expanded=False):
+            st.markdown(step_b_log)
 
     # Step C：語法驗證 + 決定性幻覺檢查結果
     step_c_log = gen.step_c_log
