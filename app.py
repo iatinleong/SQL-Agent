@@ -514,7 +514,7 @@ def _confirm_and_generate(pending: dict) -> None:
         st.markdown(report_plan_log)
 
     _s = st.empty()
-    _s.caption("⏳ Step A + B：SQL 生成中…（需要一些時間）")
+    _s.caption("⏳ Step A：SQL 生成中…（需要一些時間）")
     gen = generate(
         pending["req"],
         pending["hits"],
@@ -529,38 +529,23 @@ def _confirm_and_generate(pending: dict) -> None:
         f"{', '.join(gen.candidate_tables)}\n\n"
         + (f"**Step A 思路：**\n\n{gen.step_a_reasoning}" if gen.step_a_reasoning else "")
     )
-    step_b_log = (
-        f"**審查用 schema 範圍（{len(gen.all_tables)} 張）：**  \n"
-        f"{', '.join(gen.all_tables)}\n\n"
-        + (f"**審查結果：**\n\n{gen.final_analysis}" if gen.final_analysis else "")
-    )
     _s.empty()
     with st.expander("Prompt 注入內容", expanded=False):
         st.markdown(_fmt_injected(gen.injected_summary))
     with st.expander("Step A：草稿生成", expanded=False):
         st.markdown(step_a_log)
-    if gen.final_analysis:
-        with st.expander("Step B：SQL 審查", expanded=False):
-            st.markdown(step_b_log)
 
-    # Step C：語法驗證 + 決定性幻覺檢查結果
+    # Step C：全套驗證結果
     step_c_log = gen.step_c_log
     if step_c_log:
         all_ok = all(e.get("passed", True) for e in step_c_log)
         label = f"Step C：驗證　{'✅ 通過' if all_ok else '❌ 有問題'}"
         with st.expander(label, expanded=not all_ok):
             for entry in step_c_log:
-                if entry.get("stage") == "hallucination":
-                    if entry["passed"]:
-                        st.success("C-2 幻覺檢查：通過")
-                    else:
-                        st.warning(f"C-2 幻覺檢查：發現 {len(entry['errors'])} 個問題，已送 LLM 修正")
-                        for err in entry["errors"]:
-                            st.code(err, language="text")
-                elif entry.get("passed"):
-                    st.success(f"C-1 Round {entry['round']}：語法驗證通過")
+                if entry.get("passed"):
+                    st.success(f"Round {entry['round']}：驗證通過")
                 else:
-                    st.warning(f"C-1 Round {entry['round']}：發現 {len(entry['errors'])} 個問題")
+                    st.warning(f"Round {entry['round']}：發現 {len(entry['errors'])} 個問題，已送 LLM 修正")
                     for err in entry["errors"]:
                         st.code(err, language="text")
 
@@ -593,7 +578,6 @@ def _confirm_and_generate(pending: dict) -> None:
             "query": pending["prompt"],
             "scene": pending["scene"],
             "candidate_tables": gen.candidate_tables,
-            "all_tables": gen.all_tables,
             "final_sql": gen.final_sql,
             "tokens": {**guardrail_tokens, **all_plan_tokens, **gen.tokens},
             "cost_usd": total_cost,
@@ -612,7 +596,6 @@ def _confirm_and_generate(pending: dict) -> None:
         phase2_log=report_plan_log,
         injected_log=_fmt_injected(gen.injected_summary),
         step_a_log=step_a_log,
-        step_b_log=step_b_log,
         step_c_log=gen.step_c_log,
         cost_usd=total_cost,
     )
@@ -943,27 +926,19 @@ def _render_turn(turn: Turn, idx: int):
             ("Phase 2：報表需求確認", turn.phase2_log),
             ("Prompt 注入內容", turn.injected_log),
             ("Step A：草稿生成", turn.step_a_log),
-            ("Step B：SQL 審查", turn.step_b_log),
-            ("Step C：語法驗證", turn.step_c_log),
+            ("Step C：驗證", turn.step_c_log),
         ]
         for label, log in log_sections:
-            if label == "Step C：語法驗證":
+            if label == "Step C：驗證":
                 if log:
                     all_ok = all(e.get("passed", True) for e in log)
                     icon = "✅" if all_ok else "❌"
                     with st.expander(f"{label}　{icon}", expanded=False):
                         for entry in log:
-                            if entry.get("stage") == "hallucination":
-                                if entry["passed"]:
-                                    st.success("C-2 幻覺檢查：通過")
-                                else:
-                                    st.warning(f"C-2 幻覺檢查：發現 {len(entry['errors'])} 個問題，已送 LLM 修正")
-                                    for err in entry["errors"]:
-                                        st.code(err, language="text")
-                            elif entry.get("passed"):
-                                st.success(f"C-1 Round {entry['round']}：通過")
+                            if entry.get("passed"):
+                                st.success(f"Round {entry['round']}：驗證通過")
                             else:
-                                st.warning(f"C-1 Round {entry['round']}：{len(entry['errors'])} 個問題")
+                                st.warning(f"Round {entry['round']}：{len(entry['errors'])} 個問題")
                                 for err in entry["errors"]:
                                     st.code(err, language="text")
             elif log.strip():

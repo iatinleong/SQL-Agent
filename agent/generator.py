@@ -1,4 +1,4 @@
-"""SQL 生成：Phase 2 檢索後，Step A（候選池草稿）→ Step B（自我批判 + 最終 SQL）。"""
+"""SQL 生成：Phase 2 檢索後，Step A（候選池草稿）→ Step C（全套驗證 + 自動修正）。"""
 
 from __future__ import annotations
 
@@ -63,13 +63,11 @@ _SQL_CAP_PER_CASE = 3000  # 每筆 case SQL 注入上限（字元）
 @dataclass
 class GenerationResult:
     candidate_tables: list[str]
-    all_tables: list[str]
     step_a_sql: str
     step_a_reasoning: str
-    final_analysis: str      # Step B：與參考案例的比對差異（items 1-3）
-    final_reasoning: str     # Step B：最終 SQL 設計決策與原因（item 4，獨立欄位）
+    final_reasoning: str     # = step_a_reasoning，供 UI「SQL 思路」expander 顯示
     final_sql: str
-    step_c_log: list[dict] = field(default_factory=list)   # Step C：語法驗證迭代記錄
+    step_c_log: list[dict] = field(default_factory=list)   # Step C：全套驗證迭代記錄
     injected_summary: dict = field(default_factory=dict)
     tokens: dict[str, int] = field(default_factory=dict)
     cost_usd: float = 0.0
@@ -288,12 +286,20 @@ _STEP_A_SYSTEM = """\
 SQL 中不要放入假設性資料或 placeholder，所有欄位必須來自提供的表格定義。
 遇到「本月」「上個月」「今年」等相對日期，請依據今日日期換算成正確的絕對日期區間。
 
-【Schema 規則】
-所有表格一律加上 DM_S_VIEW schema 前綴（例如 DM_S_VIEW.M_AC_ACCOUNT），
-唯一例外：表格名稱本身已含有 schema 前綴（例如 S_MELODYJJJIAN.CUSTOMER_GROUP_2026），則保持原樣不做修改。
-
 【Oracle 語法與效能】
-- Oracle 19c+ 語法，禁用其他方言（LIMIT、ILIKE 等）還要注意效能。
+語法正確性（嚴格遵守）：
+- 使用 Oracle 19c+ 語法，禁用其他資料庫方言（MySQL 的 LIMIT、PostgreSQL 的 ILIKE 等）。
+- 取前 N 筆：FETCH FIRST N ROWS ONLY 或 ROWNUM，不使用 LIMIT。僅在使用者明確要求筆數限制（例如「前10名」「Top 50」）時才加；使用者未提及時絕對不要自行加上任何 FETCH FIRST 或 ROWNUM 限制。
+- 日期函數：TO_DATE()、TRUNC()、ADD_MONTHS()、LAST_DAY()；字串函數：NVL()、DECODE()、SUBSTR()。
+- NULL 處理：NVL() 或 IS NULL / IS NOT NULL，避免直接用 = NULL。
+- 沒有實際資料表的 SELECT 必須加 FROM DUAL。
+
+效能（每條都須主動考量）：
+- WHERE 先過濾高基數索引欄位（日期範圍、帳號、分公司代碼），縮小掃描範圍後再 JOIN。
+- 同一大表多次存取時，以 CTE（WITH ... AS）或 inline view 確保只掃描一次。
+- 排名、累計、移動平均等分析需求一律用視窗函數（ROW_NUMBER() / RANK() / SUM() OVER(...)），禁止用效能差的關聯子查詢替代。
+- 避免在 WHERE 或 JOIN 條件的索引欄位上套函數（如 TRUNC(date_col) = ...），應改寫為範圍條件。
+
 【欄位別名】
 最外層 SELECT 的每個欄位都加中文別名，例如：acct_nbr AS "帳號"、COUNT(*) AS "筆數"。"""
 
@@ -366,101 +372,6 @@ def _step_a(
     return sql, reasoning, in_tok, out_tok
 
 
-# ── Step B ─────────────────────────────────────────────────────────
-
-_STEP_B_SYSTEM = """\
-你是一位 Oracle SQL 審查員，熟悉台灣金融業報表邏輯與資料倉儲設計。
-你的任務是審查 Step A 生成的 SQL，逐項確認以下三點，若發現問題直接修正：
-
-1. 【Oracle 語法正確性】（同 Step A 語法規則，嚴格遵守）
-   - Oracle 19c+ 語法，禁用其他方言（LIMIT、ILIKE 等）
-   - 取前 N 筆：FETCH FIRST N ROWS ONLY 或 ROWNUM，不使用 LIMIT
-   - 日期函數：TO_DATE()、TRUNC()、ADD_MONTHS()、LAST_DAY()
-   - NULL 處理：NVL() / IS NULL / IS NOT NULL，避免 = NULL
-   - 沒有實際資料表的 SELECT 必須加 FROM DUAL
-   - 效能：WHERE 先過濾高基數欄位；避免在索引欄位套函數；大表多次存取用 CTE
-
-2. 【需求符合性】（對照報表需求逐項檢核）
-   - 報表維度（例：客戶層 / 帳號層 / 分公司層）是否正確？
-   - 時間範圍、篩選條件是否完整？
-   - 聚合邏輯、計算方式是否符合需求語意？
-
-3. 【欄位與表格存在性】（對照提供的欄位定義）
-   - 所有 FROM / JOIN 的表格是否存在？
-   - 所有 SELECT / WHERE / GROUP BY 的欄位是否存在於對應表格？
-
-4.  效能（每條都須主動考量）：
-- WHERE 先過濾高基數索引欄位（日期範圍、帳號、分公司代碼），縮小掃描範圍後再 JOIN。
-- 同一大表多次存取時，以 CTE（WITH ... AS）或 inline view 確保只掃描一次。
-- 排名、累計、移動平均等分析需求一律用視窗函數（ROW_NUMBER() / RANK() / SUM() OVER(...)），禁止用效能差的關聯子查詢替代。
-- 避免在 WHERE 或 JOIN 條件的索引欄位上套函數（如 TRUNC(date_col) = ...），應改寫為範圍條件。
-
-⚠️ 保守原則：沒有明確問題的地方不改。若四項均通過，直接輸出原 SQL。
-⚠️ 最終輸出必須是完整可執行的 Oracle SQL，不可輸出片段。
-DM_S_VIEW schema 前綴規則同 Step A。"""
-
-
-def _step_b(
-    requirement: str,
-    step_a_sql: str,
-    step_a_reasoning: str,
-    schema_text: str,
-    model: str,
-) -> tuple[str, str, int, int]:
-    """Step B：語法 + 需求符合 + schema 欄位三項審查，輸出最終 SQL。
-    回傳 (analysis, final_sql, in_tok, out_tok)。
-    """
-    user_prompt = f"""\
-【報表需求】
-{requirement}
-
-【Step A 生成的 SQL】
-{step_a_sql}
-
-【Step A 思路】
-{step_a_reasoning}
-
-【欄位定義（候選池 + 案例表格，比 Step A 更廣）】
-{schema_text}
-
-請依以下格式輸出：
-
---- 審查結果 ---
-（逐一確認四個面向：語法、需求符合、欄位存在、效能；
-  發現問題說明修正了什麼；四項均通過則寫「審查通過，無修正」）
-
---- 最終 SQL ---
-（完整 Oracle SQL）"""
-
-    resp = _chat(
-        model,
-        messages=[
-            {"role": "system", "content": _STEP_B_SYSTEM},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0,
-    )
-    raw = resp.choices[0].message.content or ""
-    in_tok = resp.usage.prompt_tokens
-    out_tok = resp.usage.completion_tokens
-
-    analysis, final_sql = "", ""
-    if "--- 審查結果 ---" in raw:
-        after_review = raw.split("--- 審查結果 ---", 1)[1]
-        if "--- 最終 SQL ---" in after_review:
-            analysis = after_review.split("--- 最終 SQL ---", 1)[0].strip()
-            final_sql = after_review.split("--- 最終 SQL ---", 1)[1].strip()
-        else:
-            analysis = after_review.strip()
-    else:
-        final_sql = raw.strip()
-
-    if not final_sql:
-        final_sql = step_a_sql  # fallback
-
-    return analysis, final_sql, in_tok, out_tok
-
-
 # ── 主入口 ─────────────────────────────────────────────────────────
 
 def generate(
@@ -470,11 +381,9 @@ def generate(
     model: str = GENERATION_MODEL,
     scene: str = "",
     report_plan_text: str = "",
-    run_step_b: bool = False,
 ) -> GenerationResult:
-    """完整生成流程：Step A（草稿）→ Step B（自我批判 + 最終 SQL）。"""
+    """完整生成流程：Step A（草稿）→ Step C（全套驗證 + 自動修正）。"""
     from .schema_summarizer import load_table_summaries
-    from .eval_table_selection import _extract_truth_tables
     from .entity_extractor import extract_entities
 
     available = set(load_table_summaries().keys())
@@ -544,34 +453,15 @@ def generate(
     print(f"  tokens：in={a_in}  out={a_out}")
     print(f"\n{step_a_sql[:400]}{'...' if len(step_a_sql) > 400 else ''}")
 
-    # ── Step B（optional）：擴展 schema + 三項審查 ──────────────────
-    all_hit_tables: set[str] = set(candidate_tables)
-    for hit in hits:
-        all_hit_tables |= _extract_truth_tables(case_map.get(hit.case_id, {}), available)
-    all_tables = sorted(all_hit_tables)
-
-    analysis, final_sql, b_in, b_out = "", step_a_sql, 0, 0
-    if run_step_b:
-        step_b_schema = _load_schema_for_tables(all_tables)
-        print(f"\n{SEP}")
-        print(f"=== Step B：SQL 審查（語法 + 需求符合 + 欄位存在）===")
-        print(f"  審查用 schema 範圍（{len(all_tables)} 張）：{', '.join(all_tables)}")
-        analysis, final_sql, b_in, b_out = _step_b(
-            requirement, step_a_sql, step_a_reasoning, step_b_schema, model
-        )
-        print(f"  tokens：in={b_in}  out={b_out}")
-    else:
-        print(f"\n{SEP}")
-        print("=== Step B：略過（run_step_b=False）===")
-
-    # ── Step C：語法驗證 + 決定性幻覺檢查 ───────────────────────────
-    from .sql_validator import validate_and_fix, check_and_fix_hallucination
+    # ── Step C：全套驗證（語法 + schema prefix + 幻覺）+ 自動修正 ───
+    from .sql_validator import validate_and_fix
     from .config import CLASSIFICATION_MODEL
 
+    final_sql = step_a_sql
     print(f"\n{SEP}")
-    print("=== Step C-1：語法驗證（sqlglot + sqlfluff）===")
+    print("=== Step C：SQL 驗證（語法 + schema prefix + 幻覺）===")
     final_sql, step_c_log, fix_tokens = validate_and_fix(
-        final_sql, model=CLASSIFICATION_MODEL, max_iter=1
+        final_sql, model=CLASSIFICATION_MODEL, max_iter=3
     )
     for entry in step_c_log:
         if entry["passed"]:
@@ -580,24 +470,6 @@ def generate(
             print(f"  Round {entry['round']}：❌ {len(entry['errors'])} 個問題")
             for e in entry["errors"]:
                 print(f"    {e}")
-
-    print(f"\n--- Step C-2：幻覺檢查（AST + schema.csv 決定性比對）---")
-    final_sql, h_errors, h_passed, h_tokens = check_and_fix_hallucination(
-        final_sql, model=CLASSIFICATION_MODEL
-    )
-    step_c_log.append({
-        "stage": "hallucination",
-        "errors": h_errors,
-        "passed": h_passed,
-    })
-    for k, v in h_tokens.items():
-        fix_tokens[k] = fix_tokens.get(k, 0) + v
-    if h_passed:
-        print("  ✅ 幻覺檢查通過")
-    else:
-        print(f"  ❌ 發現 {len(h_errors)} 個幻覺問題，已送 LLM 修正")
-        for e in h_errors:
-            print(f"    {e}")
 
     print(f"\n{WIDE_SEP}")
     print("=== 最終 SQL ===")
@@ -626,7 +498,7 @@ def generate(
 
     price_in, price_out = get_model_pricing(model)
     clf_price_in, clf_price_out = get_model_pricing(CLASSIFICATION_MODEL)
-    gen_cost = (a_in + b_in) / 1_000_000 * price_in + (a_out + b_out) / 1_000_000 * price_out
+    gen_cost = a_in / 1_000_000 * price_in + a_out / 1_000_000 * price_out
     fix_cost = (
         fix_tokens.get("fix_in", 0) / 1_000_000 * clf_price_in
         + fix_tokens.get("fix_out", 0) / 1_000_000 * clf_price_out
@@ -634,16 +506,13 @@ def generate(
 
     return GenerationResult(
         candidate_tables=candidate_tables,
-        all_tables=all_tables,
         step_a_sql=step_a_sql,
         step_a_reasoning=step_a_reasoning,
-        final_analysis=analysis,
-        final_reasoning=step_a_reasoning,   # Step A 思路供 UI「SQL 思路」expander 顯示
+        final_reasoning=step_a_reasoning,
         final_sql=final_sql,
         step_c_log=step_c_log,
         tokens={
             "step_a_in": a_in, "step_a_out": a_out,
-            "step_b_in": b_in, "step_b_out": b_out,
             **fix_tokens,
         },
         injected_summary=injected_summary,
