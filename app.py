@@ -382,16 +382,40 @@ def _fmt_phase2_injected(pending: dict) -> str:
     import re
     lines = []
 
+    # ── 實體擷取結果 ──────────────────────────────────────────────
+    ent = pending.get("phase2_entities", {})
+    if any([ent.get("products"), ent.get("concepts"), ent.get("branches")]):
+        lines.append("**偵測到的實體：**")
+        if ent.get("products"):
+            lines.append(f"- 商品：{', '.join(ent['products'])}")
+        if ent.get("concepts"):
+            lines.append(f"- 業務概念：{', '.join(ent['concepts'])}")
+        if ent.get("branches"):
+            lines.append(f"- 分公司：{', '.join(ent['branches'])}")
+        if ent.get("extra_tables"):
+            lines.append(f"- 追加候選表格：{', '.join(ent['extra_tables'])}")
+        if ent.get("codes"):
+            for k, v in ent["codes"].items():
+                lines.append(f"- WHERE 提示 `{k}` = `{v}`")
+
+    # ── 候選表格 ──────────────────────────────────────────────────
+    tables = pending.get("phase2_tables", [])
+    if tables:
+        lines.append(f"\n**Schema 注入表格（{len(tables)} 張）：** {', '.join(tables)}")
+
+    # ── Metrics ───────────────────────────────────────────────────
     metrics_text = pending.get("metrics_text", "")
     if metrics_text:
         names = re.findall(r"▸ (.+?)：", metrics_text)
-        lines.append(f"**注入業務指標（{len(names)} 條）：** {', '.join(names) if names else '—'}")
+        lines.append(f"\n**注入業務指標（{len(names)} 條）：** {', '.join(names) if names else '—'}")
 
+    # ── Business Skills ───────────────────────────────────────────
     skills_text = pending.get("skills_text", "")
     if skills_text:
         names = re.findall(r"▸ \[([^\]]+)\]", skills_text)
         lines.append(f"**觸發 Business Skills（{len(names)} 條）：** {', '.join(names) if names else '—'}")
 
+    # ── 個人化注意事項 ─────────────────────────────────────────────
     profile = pending.get("user_profile", "")
     if profile.strip():
         lines.append(f"\n**個人化注意事項（來自歷史對話）：**")
@@ -541,6 +565,14 @@ def _start_new_query(prompt: str, guardrail_tokens: dict | None = None) -> None:
         "metrics_text":     _metrics_text,
         "skills_text":      _skills_text,
         "user_profile":     st.session_state.get("user_profile", ""),
+        "phase2_entities": {
+            "products":     extraction.detected_products,
+            "concepts":     extraction.detected_concepts,
+            "branches":     extraction.detected_branches,
+            "extra_tables": [t for t in extraction.extra_tables if t in available],
+            "codes":        extraction.codes,
+        },
+        "phase2_tables":    sorted(_candidate_set_plan),
         "plan":             plan,
         "qa_history":       [],
         "all_plan_tokens":  dict(plan.tokens),
