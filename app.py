@@ -368,6 +368,37 @@ def _fmt_injected(summary: dict) -> str:
         for a, b in summary["relationships"]:
             lines.append(f"- {a} ↔ {b}")
 
+    if summary.get("user_profile"):
+        lines.append(f"\n**個人化注意事項（來自歷史對話）：**")
+        for row in summary["user_profile"].splitlines():
+            if row.strip():
+                lines.append(row if row.startswith("-") else f"- {row}")
+
+    return "\n".join(lines) if lines else "（無額外注入）"
+
+
+def _fmt_phase2_injected(pending: dict) -> str:
+    """格式化 Phase 2（plan_report）的 prompt 注入內容摘要。"""
+    import re
+    lines = []
+
+    metrics_text = pending.get("metrics_text", "")
+    if metrics_text:
+        names = re.findall(r"▸ (.+?)：", metrics_text)
+        lines.append(f"**注入業務指標（{len(names)} 條）：** {', '.join(names) if names else '—'}")
+
+    skills_text = pending.get("skills_text", "")
+    if skills_text:
+        names = re.findall(r"▸ \[([^\]]+)\]", skills_text)
+        lines.append(f"**觸發 Business Skills（{len(names)} 條）：** {', '.join(names) if names else '—'}")
+
+    profile = pending.get("user_profile", "")
+    if profile.strip():
+        lines.append(f"\n**個人化注意事項（來自歷史對話）：**")
+        for row in profile.strip().splitlines():
+            if row.strip():
+                lines.append(row if row.startswith("-") else f"- {row}")
+
     return "\n".join(lines) if lines else "（無額外注入）"
 
 def _fmt_phase1(hits, all_cases: list) -> str:
@@ -1110,6 +1141,9 @@ def main():
         with st.container(border=True):
             with st.expander("Phase 1：向量檢索", expanded=False):
                 st.markdown(pending["phase1_log"])
+
+            with st.expander("Phase 2 Prompt 注入內容", expanded=False):
+                st.markdown(_fmt_phase2_injected(pending))
 
             # 顯示已完成的問答記錄
             for qa in pending.get("qa_history", []):

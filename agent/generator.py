@@ -551,6 +551,7 @@ def generate(
         "skills_orig":   [s["name"] for s in skills_orig],
         "skills_new":    [s["name"] for s in skills_new_list],
         "relationships": rel_pairs,
+        "user_profile":  user_profile.strip(),
     }
 
     price_in, price_out = get_model_pricing(model)
