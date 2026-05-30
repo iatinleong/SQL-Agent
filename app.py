@@ -463,7 +463,16 @@ def _start_new_query(prompt: str, guardrail_tokens: dict | None = None) -> None:
         _s = st.empty()
         _s.caption("⏳ Phase 2：分析報表結構中…")
         case_sqls = [_get_case_sql_text(h.case_id, all_cases) for h in hits]
-        plan = plan_report(req_text, case_sqls, entities_text=entities_text, schema_text=schema_for_plan)
+        from agent.generator import _load_metrics_text, _load_business_skills_text
+        _metrics_text = _load_metrics_text(req_text)
+        _skills_text = _load_business_skills_text(req_text, scene="")
+        plan = plan_report(
+            req_text, case_sqls,
+            entities_text=entities_text,
+            schema_text=schema_for_plan,
+            metrics_text=_metrics_text,
+            skills_text=_skills_text,
+        )
         _s.empty()
 
     st.session_state._plan = {
@@ -477,6 +486,8 @@ def _start_new_query(prompt: str, guardrail_tokens: dict | None = None) -> None:
         "case_sqls":        case_sqls,
         "entities_text":    entities_text,
         "schema_for_plan":  schema_for_plan,
+        "metrics_text":     _metrics_text,
+        "skills_text":      _skills_text,
         "plan":             plan,
         "qa_history":       [],
         "all_plan_tokens":  dict(plan.tokens),
@@ -1094,6 +1105,8 @@ def main():
                                 qa_history=qa_history,
                                 entities_text=pending.get("entities_text", ""),
                                 schema_text=pending.get("schema_for_plan", ""),
+                                metrics_text=pending.get("metrics_text", ""),
+                                skills_text=pending.get("skills_text", ""),
                             )
                             _s.empty()
                             pending["plan"] = new_plan
@@ -1127,6 +1140,8 @@ def main():
                     qa_history=qa_history,
                     entities_text=pending.get("entities_text", ""),
                     schema_text=pending.get("schema_for_plan", ""),
+                    metrics_text=pending.get("metrics_text", ""),
+                    skills_text=pending.get("skills_text", ""),
                 )
                 _s.empty()
                 pending["plan"] = new_plan

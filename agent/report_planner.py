@@ -34,12 +34,16 @@ def plan_report(
     qa_history: list[dict] | None = None,
     entities_text: str = "",
     schema_text: str = "",
+    metrics_text: str = "",
+    skills_text: str = "",
     model: str = CLASSIFICATION_MODEL,
 ) -> ReportPlan:
     """
     qa_history：[{"q": "...", "a": "..."}, ...]，代表已確認的問答記錄。
     entities_text：實體擷取結果（分公司代碼、商品代碼、WHERE 提示等）。
     schema_text：候選表格欄位定義，幫助 LLM 基於實際可用欄位釐清需求。
+    metrics_text：命中的業務指標計算規則（routing 後）。
+    skills_text：命中的業務邏輯規則。
     """
     from datetime import date as _date
     today = _date.today().strftime("%Y/%m/%d")
@@ -53,6 +57,14 @@ def plan_report(
     if qa_history:
         lines = [f"  系統問：{item['q']}\n  使用者答：{item['a']}" for item in qa_history]
         qa_block = "\n\n【雙方對話記錄（已確認的資訊，請以此為依據）】\n" + "\n\n".join(lines)
+
+    metrics_block = ""
+    if metrics_text.strip():
+        metrics_block = f"\n\n【參考資料 4：業務指標計算規則】\n以下是與本次需求相關的指標定義，用於判斷使用者說的「業績」「市佔」等詞彙的精確含意，以及是否需要進一步確認口徑。\n{metrics_text.strip()}"
+
+    skills_block = ""
+    if skills_text.strip():
+        skills_block = f"\n\n【參考資料 5：業務邏輯規則】\n以下是與本次需求相關的業務邏輯，用於判斷篩選條件、計算方式是否有歧義需要釐清。\n{skills_text.strip()}"
 
     prompt = f"""\
 今日日期：{today}
@@ -70,7 +82,7 @@ def plan_report(
 
 【參考資料 3：可用欄位定義】
 以下是候選表格的欄位清單，用於判斷哪些資料可查、需求是否可實現。與使用者溝通時絕對不可提及欄位英文名稱或表格英文名稱。
-{schema_content}{qa_block}
+{schema_content}{metrics_block}{skills_block}{qa_block}
 
 你的任務是確認是否已有足夠資訊來生成報表。判斷原則：
 - 若有任何真正無法從需求或歷史案例中判斷的關鍵資訊（例如：時間範圍不明確、不知道要篩哪個條件、不確定業績指標的定義）→ status="ask"，提一個最重要的問題。
