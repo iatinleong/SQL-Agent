@@ -10,7 +10,9 @@ from __future__ import annotations
 import json
 import re
 
-from .config import ALL_CASES_PATH, TABLE_SELECTION_MODEL, get_model_pricing, openai_client
+from .config import ALL_CASES_PATH, get_model_pricing, openai_client
+
+TABLE_SELECTION_MODEL = "gpt-5.4"  # eval-only，不走 config
 from .experiment_logger import log_experiment
 from .reader import normalize_requirement
 from .schema_summarizer import load_raw_schema_as_text, load_table_summaries
