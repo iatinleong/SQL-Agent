@@ -54,7 +54,7 @@
         "note": "分子：公司客戶交易金額；分母：全市場現貨成交量。兩表透過 snap_date 對齊時間範圍，通常用子查詢或 CROSS JOIN 取 M_RF_MARKET_SHARE 的加總後再與分子計算"
       }
     ],
-    "llm_instruction": "計算市佔率 = SUM(txn_amt_twd) / SUM(market_stock_txns)，兩者必須對齊相同時間範圍。標準寫法：先用子查詢對 M_RF_MARKET_SHARE 在相同 snap_date 範圍內取 SUM(market_stock_txns) 作為純量，再與分子相除；或用 CROSS JOIN 將市場總量帶入每一列。M_RF_MARKET_SHARE 沒有帳號維度，不能直接 JOIN 業務表的帳號欄，通常透過日期（snap_date / snap_yyyymm）對齊時間"
+    "llm_instruction": "計算市佔率 = SUM(txn_amt_twd) / SUM(market_stock_txns)，兩者必須對齊相同時間範圍。分母固定加上 MARKET_INFO_CODE = '001'（台股現貨交易量），除非需求明確指定其他類型（002 融資、003 期權等）。標準寫法：先用子查詢對 M_RF_MARKET_SHARE 在相同 snap_date 範圍內加上 WHERE MARKET_INFO_CODE = '001' 取 SUM(market_stock_txns) 作為純量，再與分子相除；或用 CROSS JOIN 將市場總量帶入每一列。M_RF_MARKET_SHARE 沒有帳號維度，不能直接 JOIN 業務表的帳號欄，通常透過日期（snap_date / snap_yyyymm）對齊時間"
   },
   {
     "name": "市場成交量（市佔率分母）",
@@ -64,10 +64,10 @@
       {
         "table": "M_RF_MARKET_SHARE",
         "time_column": "snap_date",
-        "note": "市場參考表，記錄全市場現貨成交量，是計算市佔率時的分母"
+        "note": "市場參考表，記錄全市場成交量，MARKET_INFO_CODE 區分類型：001=台股現貨（最常用）、002=融資、003=期權、004=上市櫃淨手收、005=投資人占比。計算一般台股市佔率時固定用 MARKET_INFO_CODE = '001'"
       }
     ],
-    "llm_instruction": "計算市佔率時：分子為公司客戶的 SUM(txn_amt_twd)，分母為 M_RF_MARKET_SHARE 的 SUM(market_stock_txns)。兩者需對齊相同時間範圍。M_RF_MARKET_SHARE 與業務表透過 snap_date 關聯，通常用 CROSS JOIN 或子查詢取得市場總量。"
+    "llm_instruction": "計算市佔率時：分子為公司客戶的 SUM(txn_amt_twd)，分母為 M_RF_MARKET_SHARE 的 SUM(market_stock_txns) 且須加 WHERE MARKET_INFO_CODE = '001'（台股現貨交易量）。除非需求明確說要融資或期權市佔，否則分母預設用 MARKET_INFO_CODE = '001'。兩者需對齊相同時間範圍，透過 snap_date 關聯，通常用 CROSS JOIN 或子查詢取得市場總量。"
   },
   {
     "name": "不重複客戶數",
