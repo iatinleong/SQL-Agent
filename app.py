@@ -526,6 +526,8 @@ def _start_new_query(prompt: str, guardrail_tokens: dict | None = None) -> None:
                 f"| `{t}` | {_summaries.get(t, '')[:55]} | {s:.4f} |"
                 for t, s in _semantic_with_scores
             )
+            _union_tables_sorted = sorted(_candidate_set_plan)
+            _union_rows = "、".join(f"`{t}`" for t in _union_tables_sorted)
             phase1_log = (
                 "**Top-5 案例檢索**\n\n"
                 + _fmt_phase1(hits, all_cases)
@@ -533,6 +535,7 @@ def _start_new_query(prompt: str, guardrail_tokens: dict | None = None) -> None:
                 "| 表格 | 業務說明 | 相似度 |\n"
                 "|------|---------|--------|\n"
                 + _table_rows
+                + f"\n\n**Union 候選表格（{len(_union_tables_sorted)} 張）**\n\n{_union_rows}"
             )
         finally:
             clear_waiting_callback()
