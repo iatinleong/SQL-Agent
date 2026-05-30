@@ -73,7 +73,7 @@ details summary:hover { color:#222; }
 .stChatInput textarea { font-size:1rem; }
 
 /* Hide native dialog close (X) button — replaced by explicit buttons */
-[data-testid="stBaseButton-headerNoPadding"] { display: none !important; }
+div[role="dialog"] [data-testid="stBaseButton-headerNoPadding"] { display: none !important; }
 
 /* ── Sidebar：ChatGPT 風格 ────────────────────────────────── */
 [data-testid="stSidebar"] { background:#171717 !important; border-right:none !important; }
@@ -986,7 +986,7 @@ def main():
 
     # 確保 sidebar DOM 存在（CSS 深色背景才能套用）
     with st.sidebar:
-        pass
+        st.empty()
 
     # 自動從 URL query param 還原登入狀態（refresh 後 URL 不變，token 還在）
     if not st.session_state.get("current_user"):
