@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from .config import CLASSIFICATION_MODEL
+from .config import GUARDRAIL_MODEL
 from .generator import _chat
 
 _SYSTEM = """\
@@ -34,7 +34,7 @@ _SYSTEM = """\
 {"safe": false, "reason": "一句話說明拒絕原因（中文）"}"""
 
 
-def check_input(text: str, model: str = CLASSIFICATION_MODEL) -> tuple[bool, str, dict]:
+def check_input(text: str, model: str = GUARDRAIL_MODEL) -> tuple[bool, str, dict]:
     """回傳 (is_safe, reason, tokens)。is_safe=False 時 reason 說明拒絕原因。"""
     resp = _chat(
         model,

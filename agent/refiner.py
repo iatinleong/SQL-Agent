@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from .config import CLASSIFICATION_MODEL, GENERATION_MODEL, get_model_pricing
+from .config import REFINER_MODEL, GENERATION_MODEL, get_model_pricing
 from .generator import _chat, _load_schema_for_tables
 
 INTENTS = ("ADD_TABLE", "REMOVE_TABLE", "MODIFY_SQL", "NEW_QUERY")
@@ -59,7 +59,7 @@ def classify_followup(
     current_sql: str,
     new_query: str,
     available_tables: set[str],
-    model: str = CLASSIFICATION_MODEL,
+    model: str = REFINER_MODEL,
 ) -> dict:
     """判斷追問意圖，回傳 {intent, target_tables, explanation}。"""
     table_sample = ", ".join(sorted(available_tables)[:60])
@@ -192,7 +192,7 @@ def refine(
     else:
         new_sql = raw.strip()
 
-    clf_price_in, clf_price_out = get_model_pricing(CLASSIFICATION_MODEL)
+    clf_price_in, clf_price_out = get_model_pricing(REFINER_MODEL)
     clf_in = classify_tokens.get("classify_in", 0)
     clf_out = classify_tokens.get("classify_out", 0)
     clf_cost = clf_in / 1_000_000 * clf_price_in + clf_out / 1_000_000 * clf_price_out

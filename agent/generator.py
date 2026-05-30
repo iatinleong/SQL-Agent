@@ -511,13 +511,13 @@ def generate(
 
     # ── Step C：全套驗證（語法 + schema prefix + 幻覺）+ 自動修正 ───
     from .sql_validator import validate_and_fix
-    from .config import CLASSIFICATION_MODEL
+    from .config import VALIDATOR_MODEL
 
     final_sql = step_a_sql
     print(f"\n{SEP}")
     print("=== Step B：SQL 驗證（語法 + schema prefix + 幻覺）===")
     final_sql, step_c_log, fix_tokens = validate_and_fix(
-        final_sql, model=CLASSIFICATION_MODEL, max_iter=1
+        final_sql, model=VALIDATOR_MODEL, max_iter=1
     )
     for entry in step_c_log:
         if entry["passed"]:
@@ -555,7 +555,7 @@ def generate(
     }
 
     price_in, price_out = get_model_pricing(model)
-    clf_price_in, clf_price_out = get_model_pricing(CLASSIFICATION_MODEL)
+    clf_price_in, clf_price_out = get_model_pricing(VALIDATOR_MODEL)
     gen_cost = a_in / 1_000_000 * price_in + a_out / 1_000_000 * price_out
     fix_cost = (
         fix_tokens.get("fix_in", 0) / 1_000_000 * clf_price_in

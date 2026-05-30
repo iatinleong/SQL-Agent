@@ -24,9 +24,13 @@ ALL_CASES_PATH: Path = BASE_DIR / "all_cases.json"
 TAXONOMY_PATH: Path = BASE_DIR / "taxonomy.json"
 
 # ── 模型 ─────────────────────────────────────────────────────────────────────
-CLASSIFICATION_MODEL: str = "gpt-5-mini"
-TABLE_SELECTION_MODEL: str = "gpt-5.4"
+CLASSIFICATION_MODEL: str = "gpt-5-mini"  # batch/CLI 工具用（classifier, summarizer 等）
 GENERATION_MODEL: str = "o3"
+PLAN_MODEL: str = "gpt-5.1"       # report_planner：報表需求確認
+VALIDATOR_MODEL: str = "gpt-5.4-mini"  # sql_validator：SQL 錯誤修正
+GUARDRAIL_MODEL: str = "gpt-5-mini"  # guardrail：安全過濾
+REFINER_MODEL: str = "gpt-5.4-mini"    # refiner：追問意圖分類
+PROFILE_MODEL: str = "gpt-5-mini"    # user_profile：個人化摘要
 
 # ── 模型費率（每百萬 token，USD）────────────────────────────────────────────
 MODEL_PRICING: dict[str, tuple[float, float]] = {

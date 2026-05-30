@@ -7,7 +7,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from .config import CLASSIFICATION_MODEL
+from .config import VALIDATOR_MODEL
 
 _SCHEMA_PATH = Path(__file__).parent.parent / "schema.csv"
 _DM_S_VIEW = "DM_S_VIEW."
@@ -344,7 +344,7 @@ def _fix_with_llm(sql: str, errors: list[str], model: str) -> tuple[str, dict]:
 
 def validate_and_fix(
     sql: str,
-    model: str = CLASSIFICATION_MODEL,
+    model: str = VALIDATOR_MODEL,
     max_iter: int = 3,
 ) -> tuple[str, list[dict], dict]:
     """

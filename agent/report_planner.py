@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from .config import CLASSIFICATION_MODEL
+from .config import PLAN_MODEL
 from .generator import _chat
 
 
@@ -37,7 +37,7 @@ def plan_report(
     metrics_text: str = "",
     skills_text: str = "",
     user_profile: str = "",
-    model: str = CLASSIFICATION_MODEL,
+    model: str = PLAN_MODEL,
 ) -> ReportPlan:
     """
     qa_history：[{"q": "...", "a": "..."}, ...]，代表已確認的問答記錄。

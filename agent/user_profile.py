@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .config import CLASSIFICATION_MODEL
+from .config import PROFILE_MODEL
 from .supabase_logger import get_client
 
 _TABLE = "user_profiles"
@@ -62,7 +62,7 @@ def update_profile(
 
     try:
         resp = _chat(
-            CLASSIFICATION_MODEL,
+            PROFILE_MODEL,
             messages=[
                 {
                     "role": "system",
