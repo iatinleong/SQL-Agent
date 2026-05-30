@@ -340,14 +340,28 @@ def _fmt_injected(summary: dict) -> str:
                 lines.append(f"- WHERE 提示 `{k}` = `{v}`")
 
     if summary.get("skills"):
-        lines.append(f"\n**觸發的 Business Skills（{len(summary['skills'])} 條）：**")
-        for s in summary["skills"]:
-            lines.append(f"- {s}")
+        orig_s  = summary.get("skills_orig", [])
+        new_s   = summary.get("skills_new", [])
+        all_s   = summary["skills"]
+        lines.append(f"\n**觸發的 Business Skills（{len(all_s)} 條）：**")
+        if new_s:
+            lines.append(f"- 原始需求：{', '.join(orig_s) if orig_s else '—'}")
+            lines.append(f"- 最終確認新增：{', '.join(new_s)}")
+        else:
+            for s in all_s:
+                lines.append(f"- {s}")
 
     if summary.get("metrics"):
-        lines.append(f"\n**注入的業務指標（{len(summary['metrics'])} 條）：**")
-        for m in summary["metrics"]:
-            lines.append(f"- {m}")
+        orig_m  = summary.get("metrics_orig", [])
+        new_m   = summary.get("metrics_new", [])
+        all_m   = summary["metrics"]
+        lines.append(f"\n**注入的業務指標（{len(all_m)} 條）：**")
+        if new_m:
+            lines.append(f"- 原始需求：{', '.join(orig_m) if orig_m else '—'}")
+            lines.append(f"- 最終確認新增：{', '.join(new_m)}")
+        else:
+            for m in all_m:
+                lines.append(f"- {m}")
 
     if summary.get("relationships"):
         lines.append(f"\n**注入的 JOIN 關聯（{len(summary['relationships'])} 組）：**")
@@ -510,6 +524,12 @@ def _confirm_and_generate(pending: dict) -> None:
 
     _s = st.empty()
     _s.caption("⏳ Step A：SQL 生成中…（需要一些時間）")
+
+    # 建立最終確認補充文字：Q&A 回答 + LLM 理解摘要
+    _qa_text = " ".join(item["a"] for item in pending.get("qa_history", []) if item.get("a"))
+    _understanding = plan.understanding or ""
+    _extra_context = " ".join(filter(None, [_qa_text, _understanding])).strip()
+
     gen = generate(
         pending["req"],
         pending["hits"],
@@ -517,6 +537,7 @@ def _confirm_and_generate(pending: dict) -> None:
         model=GENERATION_MODEL,
         scene=pending["scene"],
         report_plan_text=report_plan_text,
+        extra_context=_extra_context,
     )
 
     step_a_log = (

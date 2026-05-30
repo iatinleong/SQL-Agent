@@ -119,58 +119,63 @@ def _load_schema_for_tables(table_names: list[str]) -> str:
 
 # ── Metrics 載入 ──────────────────────────────────────────────────
 
+def _select_metrics(query: str = "") -> list[dict]:
+    """回傳 trigger_keywords routing 後命中的 metric dicts；無命中時 fallback 全量。"""
+    if not METRICS_PATH.exists():
+        return []
+    with open(METRICS_PATH, encoding="utf-8") as f:
+        metrics = json.load(f)
+    if not query:
+        return metrics
+    q = query.lower()
+    matched = [m for m in metrics if any(kw.lower() in q for kw in m.get("trigger_keywords", []))]
+    return matched if matched else metrics
+
+
+def _format_metrics_text(selected: list[dict]) -> str:
+    if not selected:
+        return ""
+    lines = ["【業務指標計算規則】"]
+    for m in selected:
+        lines.append(f"\n▸ {m.get('name', '')}：{m.get('expression', '')}")
+        if m.get("llm_instruction"):
+            lines.append(f"  → {m['llm_instruction']}")
+    return "\n".join(lines)
+
+
 def _load_metrics_text(query: str = "") -> str:
     """載入 metrics.json，依 trigger_keywords routing 只注入命中的指標。
     完全沒命中時 fallback 全量注入。
     """
-    if not METRICS_PATH.exists():
-        return ""
-    with open(METRICS_PATH, encoding="utf-8") as f:
-        metrics = json.load(f)
-
-    if query:
-        q = query.lower()
-        matched = [
-            m for m in metrics
-            if any(kw.lower() in q for kw in m.get("trigger_keywords", []))
-        ]
-        selected = matched if matched else metrics
-    else:
-        selected = metrics
-
-    lines = ["【業務指標計算規則】"]
-    for m in selected:
-        name = m.get("name", "")
-        expr = m.get("expression", "")
-        instr = m.get("llm_instruction", "")
-        lines.append(f"\n▸ {name}：{expr}")
-        if instr:
-            lines.append(f"  → {instr}")
-    return "\n".join(lines)
+    return _format_metrics_text(_select_metrics(query))
 
 
 # ── Business Skills 載入 ──────────────────────────────────────────
 
-def _load_business_skills_text(query: str, scene: str = "") -> str:
-    """依場景名稱或關鍵字觸發 business_skills.json 規則，組成 prompt 文字。"""
+def _select_skills(query: str = "", scene: str = "") -> list[dict]:
+    """回傳 trigger_keywords / scene routing 後命中的 skill dicts。"""
     if not BUSINESS_SKILLS_PATH.exists():
-        return ""
+        return []
     with open(BUSINESS_SKILLS_PATH, encoding="utf-8") as f:
         skills: list[dict] = json.load(f)
+    q = query.lower()
+    return [
+        s for s in skills
+        if (scene and any(sc == scene for sc in s.get("trigger_scenes", [])))
+        or any(kw.lower() in q for kw in s.get("trigger_keywords", []))
+    ]
 
-    triggered: list[str] = []
-    query_lower = query.lower()
-    for skill in skills:
-        scenes: list[str] = skill.get("trigger_scenes", [])
-        keywords: list[str] = skill.get("trigger_keywords", [])
-        scene_hit = scene and any(s == scene for s in scenes)
-        keyword_hit = any(kw.lower() in query_lower for kw in keywords)
-        if scene_hit or keyword_hit:
-            triggered.append(f"▸ [{skill['name']}]\n{skill['rule']}")
 
+def _format_skills_text(triggered: list[dict]) -> str:
     if not triggered:
         return ""
-    return "【業務技能規則（請務必遵守）】\n\n" + "\n\n".join(triggered)
+    parts = [f"▸ [{s['name']}]\n{s['rule']}" for s in triggered]
+    return "【業務技能規則（請務必遵守）】\n\n" + "\n\n".join(parts)
+
+
+def _load_business_skills_text(query: str, scene: str = "") -> str:
+    """依場景名稱或關鍵字觸發 business_skills.json 規則，組成 prompt 文字。"""
+    return _format_skills_text(_select_skills(query, scene))
 
 
 # ── Relationships 載入 ─────────────────────────────────────────────
@@ -398,16 +403,21 @@ def generate(
     model: str = GENERATION_MODEL,
     scene: str = "",
     report_plan_text: str = "",
+    extra_context: str = "",
 ) -> GenerationResult:
-    """完整生成流程：Step A（草稿）→ Step C（全套驗證 + 自動修正）。"""
+    """完整生成流程：Step A（草稿）→ Step B（全套驗證 + 自動修正）。
+    extra_context：Q&A 確認後的最終需求補充文字，與原始 requirement union 做 metrics/skills 提取。
+    """
     from .schema_summarizer import load_table_summaries
     from .entity_extractor import extract_entities
 
     available = set(load_table_summaries().keys())
     case_map = {str(c.get("資料夾")): c for c in all_cases}
 
-    # ── 實體擷取：商品/概念/分公司 → extra_tables + 提示文字 ────────
-    extraction = extract_entities(requirement)
+    # ── 實體擷取：對 combined text（原始 + extra_context）──────────
+    from .table_retriever import retrieve_tables
+    extraction_text = (requirement + "\n" + extra_context).strip() if extra_context else requirement
+    extraction = extract_entities(extraction_text)
     if extraction.detected_products or extraction.detected_concepts or extraction.detected_branches:
         print(f"\n{SEP}")
         print("=== 實體擷取 ===")
@@ -423,12 +433,13 @@ def generate(
         if extraction.codes:
             print(f"  WHERE 提示：{extraction.codes}")
 
-    # ── 候選池：case union ∪ table embedding 檢索 ∪ entity extra_tables ──
-    from .table_retriever import retrieve_tables
+    # ── 候選池：case union ∪ table embedding 檢索（兩次）∪ entity extra_tables ──
     candidate_tables = _get_union_tables(hits, all_cases, available)
     candidate_set = set(candidate_tables)
 
-    semantic_tables = retrieve_tables(requirement, top_n=5)
+    semantic_a = retrieve_tables(requirement, top_n=5)
+    semantic_b = retrieve_tables(extra_context, top_n=5) if extra_context else []
+    semantic_tables = list(dict.fromkeys(semantic_a + semantic_b))
     new_from_semantic = [t for t in semantic_tables if t in available and t not in candidate_set]
     if new_from_semantic:
         print(f"\n{SEP}")
@@ -441,23 +452,38 @@ def generate(
     candidate_tables = sorted(candidate_set)
 
     rels_text = _load_relationships_text(table_set=candidate_set)
-    metrics_text = _load_metrics_text(requirement)
-    skills_text = _load_business_skills_text(requirement, scene)
+
+    # ── Metrics union：原始需求 ∪ extra_context ────────────────────
+    metrics_orig = _select_metrics(requirement)
+    metrics_extra = _select_metrics(extra_context) if extra_context else []
+    seen_m = {m["name"] for m in metrics_orig}
+    metrics_new = [m for m in metrics_extra if m["name"] not in seen_m]
+    metrics_union = metrics_orig + metrics_new
+    metrics_text = _format_metrics_text(metrics_union)
+
+    # ── Skills union：原始需求 ∪ extra_context ─────────────────────
+    skills_orig = _select_skills(requirement, scene)
+    skills_extra = _select_skills(extra_context, scene) if extra_context else []
+    seen_s = {s["name"] for s in skills_orig}
+    skills_new_list = [s for s in skills_extra if s["name"] not in seen_s]
+    skills_union = skills_orig + skills_new_list
+    skills_text = _format_skills_text(skills_union)
+
     step_a_schema = _load_schema_for_tables(candidate_tables)
 
     rel_count = rels_text.count("\n  ") if rels_text else 0
-    skills_count = skills_text.count("▸ [") if skills_text else 0
+    _m_total = sum(1 for _ in open(METRICS_PATH, encoding="utf-8") if '"name"' in _)
+    _m_mode = "routing" if len(metrics_union) < _m_total else "fallback 全量"
 
     print(f"\n{SEP}")
     print(f"=== Step A：候選池草稿生成（模型：{model}，注入 {len(hits)} 筆參考案例）===")
     print(f"  候選表格（{len(candidate_tables)} 張）：{', '.join(candidate_tables)}")
     print(f"  注入 relationships：{rel_count} 條（已依候選池過濾）")
-    _m_count = len([l for l in metrics_text.splitlines() if l.startswith("▸")])
-    _m_total = sum(1 for _ in open(METRICS_PATH, encoding="utf-8") if '"name"' in _)
-    _m_mode = "routing" if _m_count < _m_total else "fallback 全量"
-    print(f"  注入 metrics：{_m_count}/{_m_total} 條（{_m_mode}）")
-    if skills_count:
-        print(f"  注入 business_skills：{skills_count} 條（場景={scene or '—'}）")
+    print(f"  注入 metrics：{len(metrics_union)}/{_m_total} 條（{_m_mode}）"
+          + (f"，其中 {len(metrics_new)} 條來自最終確認" if metrics_new else ""))
+    if skills_union:
+        print(f"  注入 business_skills：{len(skills_union)} 條"
+              + (f"，其中 {len(skills_new_list)} 條來自最終確認" if skills_new_list else ""))
 
     from datetime import date as _date
     today = _date.today().strftime("%Y/%m/%d")
@@ -481,7 +507,7 @@ def generate(
     print(f"\n{SEP}")
     print("=== Step B：SQL 驗證（語法 + schema prefix + 幻覺）===")
     final_sql, step_c_log, fix_tokens = validate_and_fix(
-        final_sql, model=CLASSIFICATION_MODEL, max_iter=3
+        final_sql, model=CLASSIFICATION_MODEL, max_iter=1
     )
     for entry in step_c_log:
         if entry["passed"]:
@@ -497,9 +523,6 @@ def generate(
     print(WIDE_SEP)
 
     # ── 整理注入內容摘要 ──────────────────────────────────────────
-    import re as _re
-    skill_names = _re.findall(r"▸ \[([^\]]+)\]", skills_text)
-    metric_names = _re.findall(r"▸ (.+?)：", metrics_text)
     rel_pairs = _get_relationship_pairs(table_set=candidate_set)
 
     injected_summary = {
@@ -511,8 +534,12 @@ def generate(
             "extra_tables": [t for t in extraction.extra_tables if t in available],
             "codes":     extraction.codes,
         },
-        "skills":        skill_names,
-        "metrics":       metric_names,
+        "metrics":       [m["name"] for m in metrics_union],
+        "metrics_orig":  [m["name"] for m in metrics_orig],
+        "metrics_new":   [m["name"] for m in metrics_new],
+        "skills":        [s["name"] for s in skills_union],
+        "skills_orig":   [s["name"] for s in skills_orig],
+        "skills_new":    [s["name"] for s in skills_new_list],
         "relationships": rel_pairs,
     }
 
