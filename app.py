@@ -31,7 +31,7 @@ st.markdown("""
 <style>
 .block-container { padding-top: 1.8rem; padding-bottom: 4rem;
                    padding-left: 3rem; padding-right: 3rem; }
-footer, header { visibility: hidden; }
+footer { visibility: hidden; }
 
 /* Title */
 .sa-title { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px;
