@@ -49,12 +49,17 @@
     "expression": "SUM(txn_amt_twd) / SUM(market_stock_txns)",
     "source_options": [
       {
-        "table": "M_AC_ACCOUNT_REVENUE（分子）+ M_RF_MARKET_SHARE（分母）",
-        "time_column": "snap_yyyymm / snap_date",
-        "note": "分子：公司客戶 SUM(txn_amt_twd)；分母：M_RF_MARKET_SHARE.SUM(market_stock_txns) WHERE MARKET_INFO_CODE = '001'（台股現貨，預設）。MARKET_INFO_CODE 類型：001=台股現貨、002=融資、003=期權、004=上市櫃淨手收、005=投資人占比。兩表透過 snap_date 對齊時間範圍，通常用子查詢或 CROSS JOIN 取分母純量"
+        "table": "M_AT_STOCK_TXN（分子，台股現貨）+ M_RF_MARKET_SHARE（分母）",
+        "time_column": "txn_date / snap_date",
+        "note": "台股現貨市佔（最常見）：分子用 M_AT_STOCK_TXN SUM(txn_amt_twd)，分母用 M_RF_MARKET_SHARE SUM(market_stock_txns) WHERE MARKET_INFO_CODE = '001'，兩者透過日期範圍對齊"
+      },
+      {
+        "table": "M_AT_FUTURE_TXN（分子，期權）+ M_RF_MARKET_SHARE（分母）",
+        "time_column": "txn_date / snap_date",
+        "note": "期權市佔：分子用 M_AT_FUTURE_TXN，分母用 M_RF_MARKET_SHARE WHERE MARKET_INFO_CODE = '003'"
       }
     ],
-    "llm_instruction": "計算市佔率 = SUM(txn_amt_twd) / SUM(market_stock_txns)，兩者必須對齊相同時間範圍。分母來自 M_RF_MARKET_SHARE，預設加 WHERE MARKET_INFO_CODE = '001'（台股現貨交易量），除非需求明確指定其他類型（002 融資、003 期權等）。標準寫法：先用子查詢在相同 snap_date 範圍內取 SUM(market_stock_txns) WHERE MARKET_INFO_CODE = '001' 作為純量，再與分子相除；或用 CROSS JOIN 帶入每一列。M_RF_MARKET_SHARE 沒有帳號維度，不能直接 JOIN 業務表帳號欄，透過日期（snap_date / snap_yyyymm）對齊時間。"
+    "llm_instruction": "計算市佔率 = SUM(txn_amt_twd) / SUM(market_stock_txns)，分子分母必須口徑一致且對齊相同時間範圍。分子來源依商品類型選擇對應的交易明細表（不用 M_AC_ACCOUNT_REVENUE，避免跨商品混算）：台股現貨市佔用 M_AT_STOCK_TXN（對應分母 MARKET_INFO_CODE='001'）；期權市佔用 M_AT_FUTURE_TXN（對應分母 MARKET_INFO_CODE='003'）；融資市佔用 M_AT_STOCK_TXN 加融資條件（對應分母 MARKET_INFO_CODE='002'）。預設為台股現貨市佔。分母標準寫法：子查詢對 M_RF_MARKET_SHARE 在相同日期範圍加 WHERE MARKET_INFO_CODE = '001' 取 SUM(market_stock_txns) 作為純量，或 CROSS JOIN 帶入每列。M_RF_MARKET_SHARE 無帳號維度，不能直接 JOIN 業務表帳號欄。"
   },
   {
     "name": "不重複客戶數",
