@@ -36,6 +36,7 @@ def plan_report(
     schema_text: str = "",
     metrics_text: str = "",
     skills_text: str = "",
+    user_profile: str = "",
     model: str = CLASSIFICATION_MODEL,
 ) -> ReportPlan:
     """
@@ -66,6 +67,10 @@ def plan_report(
     if skills_text.strip():
         skills_block = f"\n\n【參考資料 5：業務邏輯規則】\n以下是與本次需求相關的業務邏輯，用於判斷篩選條件、計算方式是否有歧義需要釐清。\n{skills_text.strip()}"
 
+    profile_block = ""
+    if user_profile.strip():
+        profile_block = f"\n\n【參考資料 6：使用者個人化習慣（來自歷史對話）】\n以下是此使用者過去查詢習慣的整理，已確認的偏好可直接採用，不必再詢問。\n{user_profile.strip()}"
+
     prompt = f"""\
 今日日期：{today}
 
@@ -82,7 +87,7 @@ def plan_report(
 
 【參考資料 3：可用欄位定義】
 以下是候選表格的欄位清單，用於判斷哪些資料可查、需求是否可實現。與使用者溝通時絕對不可提及欄位英文名稱或表格英文名稱。
-{schema_content}{metrics_block}{skills_block}{qa_block}
+{schema_content}{metrics_block}{skills_block}{profile_block}{qa_block}
 
 你的任務是確認是否已有足夠資訊來生成報表。判斷原則：
 - 若有任何真正無法從需求或歷史案例中判斷的關鍵資訊（例如：時間範圍不明確、不知道要篩哪個條件、不確定業績指標的定義）→ status="ask"，提一個最重要的問題。

@@ -337,9 +337,17 @@ def _step_a(
     today: str = "",
     report_plan_text: str = "",
     cases_text: str = "",
+    user_profile: str = "",
 ) -> tuple[str, str, int, int]:
     """Step A：LLM 從候選池生成 SQL + 思路（附參考案例）。回傳 (sql, reasoning, in_tok, out_tok)。"""
     optional_blocks = []
+    if user_profile.strip():
+        optional_blocks.append(
+            "【使用者個人化注意事項（來自歷史對話）】\n"
+            "以下根據此使用者過去的查詢習慣整理，僅供參考。\n"
+            "請依本次需求判斷哪些條目適用，與本次查詢無關的請忽略。\n"
+            + user_profile.strip()
+        )
     if report_plan_text:
         optional_blocks.append(report_plan_text)
     if entities_text:
@@ -404,6 +412,7 @@ def generate(
     scene: str = "",
     report_plan_text: str = "",
     extra_context: str = "",
+    user_profile: str = "",
 ) -> GenerationResult:
     """完整生成流程：Step A（草稿）→ Step B（全套驗證 + 自動修正）。
     extra_context：Q&A 確認後的最終需求補充文字，與原始 requirement union 做 metrics/skills 提取。
@@ -495,6 +504,7 @@ def generate(
         today=today,
         report_plan_text=report_plan_text,
         cases_text=cases_text,
+        user_profile=user_profile,
     )
     print(f"  tokens：in={a_in}  out={a_out}")
     print(f"\n{step_a_sql[:400]}{'...' if len(step_a_sql) > 400 else ''}")

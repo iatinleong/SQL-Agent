@@ -396,6 +396,12 @@ def _start_new_query(prompt: str, guardrail_tokens: dict | None = None) -> None:
     from agent.report_planner import plan_report
     from agent.retriever import retrieve
 
+    # 載入使用者個人化簡介（登入後一次，存在 session state 避免重複查詢）
+    if "user_profile" not in st.session_state:
+        from agent.user_profile import load_profile
+        _emp = (st.session_state.get("current_user") or {}).get("employee_id", "")
+        st.session_state.user_profile = load_profile(_emp)
+
     with open(ALL_CASES_PATH, encoding="utf-8") as f:
         all_cases = _json.load(f)
 
@@ -486,6 +492,7 @@ def _start_new_query(prompt: str, guardrail_tokens: dict | None = None) -> None:
             schema_text=schema_for_plan,
             metrics_text=_metrics_text,
             skills_text=_skills_text,
+            user_profile=st.session_state.get("user_profile", ""),
         )
         _s.empty()
 
@@ -502,6 +509,7 @@ def _start_new_query(prompt: str, guardrail_tokens: dict | None = None) -> None:
         "schema_for_plan":  schema_for_plan,
         "metrics_text":     _metrics_text,
         "skills_text":      _skills_text,
+        "user_profile":     st.session_state.get("user_profile", ""),
         "plan":             plan,
         "qa_history":       [],
         "all_plan_tokens":  dict(plan.tokens),
@@ -538,6 +546,7 @@ def _confirm_and_generate(pending: dict) -> None:
         scene=pending["scene"],
         report_plan_text=report_plan_text,
         extra_context=_extra_context,
+        user_profile=pending.get("user_profile", ""),
     )
 
     step_a_log = (
@@ -618,6 +627,22 @@ def _confirm_and_generate(pending: dict) -> None:
     st.session_state.conversation.append(turn)
     st.session_state._feedback_pending  = True
     st.session_state._auto_fb_triggered = False
+
+    # ── 個人化簡介更新（有 Q&A 修正才觸發）──────────────────────────
+    _emp = (st.session_state.get("current_user") or {}).get("employee_id", "")
+    _qa  = pending.get("qa_history", [])
+    if _emp and _qa:
+        from agent.user_profile import update_profile
+        _corrections = [item["a"] for item in _qa if item.get("a")]
+        new_profile = update_profile(
+            employee_id=_emp,
+            current_profile=pending.get("user_profile", ""),
+            requirement=pending["req"],
+            qa_history=_qa,
+            understanding=plan.understanding or "",
+            corrections=_corrections,
+        )
+        st.session_state.user_profile = new_profile
 
     # 存 / 更新 Supabase session
     if st.session_state.get("current_user"):
@@ -724,6 +749,21 @@ def _run_and_render_refiner(new_query: str, guardrail_tokens: dict | None = None
     })
     if not ok:
         st.warning(f"⚠️ Supabase log 寫入失敗：{err}")
+
+    # ── 個人化簡介更新（refine 本身就是修正訊號）────────────────────
+    if result.intent in ("MODIFY_SQL", "ADD_TABLE"):
+        _emp = (st.session_state.get("current_user") or {}).get("employee_id", "")
+        if _emp:
+            from agent.user_profile import update_profile
+            new_profile = update_profile(
+                employee_id=_emp,
+                current_profile=st.session_state.get("user_profile", ""),
+                requirement=new_query,
+                qa_history=[],
+                understanding="",
+                corrections=[new_query],
+            )
+            st.session_state.user_profile = new_profile
 
     return Turn(
         user_query=new_query,
@@ -1128,6 +1168,7 @@ def main():
                                 schema_text=pending.get("schema_for_plan", ""),
                                 metrics_text=pending.get("metrics_text", ""),
                                 skills_text=pending.get("skills_text", ""),
+                                user_profile=pending.get("user_profile", ""),
                             )
                             _s.empty()
                             pending["plan"] = new_plan
